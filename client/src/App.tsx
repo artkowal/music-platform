@@ -1,34 +1,46 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState, useEffect } from 'react' // <-- 1. DODANE IMPORTY
+import { Button } from "@/components/ui/button"
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [theme, setTheme] = useState<'light' | 'dark'>("light")
+
+  useEffect(() => {
+    const root = window.document.documentElement
+    root.classList.remove("light", "dark")
+    root.classList.add(theme)
+  }, [theme]) 
+
+  const toggleTheme = () => {
+    setTheme(theme === "light" ? "dark" : "light")
+  }
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="flex min-h-screen w-full flex-col items-center justify-center p-8">
+
+      <div className="absolute top-8 right-8">
+        <Button variant="outline" onClick={toggleTheme}>
+          Zmień motyw (teraz: {theme})
+        </Button>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
+
+      <h1 className="bg-gradient-brand bg-clip-text text-5xl font-bold text-transparent">
+        Witaj na platformie!
+      </h1>
+
+      <div className="mt-12 flex flex-wrap justify-center gap-4">
+
+        <Button>Przycisk Primary</Button>
+        <Button variant="secondary">Przycisk Secondary</Button>
+
+        <Button className="bg-success text-white hover:bg-success-light">
+          Success
+        </Button>
+        <Button className="bg-error text-white hover:bg-error-light">
+          Error
+        </Button>
+
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    </div>
   )
 }
 
