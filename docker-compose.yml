@@ -1,0 +1,71 @@
+services:
+  # Serwis Bazy Danych (MySQL)
+  db:
+    image: mysql:8.0
+    container_name: music_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "admin"
+      MYSQL_DATABASE: "music-platform-db"
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database:/docker-entrypoint-initdb.d
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-p$$MYSQL_ROOT_PASSWORD",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: music_pma
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: db
+      MYSQL_ROOT_PASSWORD: "admin"
+    depends_on:
+      - db
+
+  # Serwis Backendu (Node.js + Express)
+  backend:
+    container_name: music_server
+    build: ./server
+    restart: unless-stopped
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    environment:
+      DATABASE_URL: "mysql://root:admin@db:3306/music-platform-db"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Serwis Frontendu (React + Vite)
+  frontend:
+    container_name: music_client
+    build: ./client
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    stdin_open: true
+    tty: true
+
+volumes:
+  mysql_data:
