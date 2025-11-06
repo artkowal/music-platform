@@ -1,4 +1,4 @@
--- Ustawienie strefy czasowej
+-- Ustawienie strefy czasowej (opcjonalne, ale dobra praktyka)
 SET TIME_ZONE = '+00:00';
 
 -- 1. Tabela Użytkowników
@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS Users (
   password_hash VARCHAR(255) NOT NULL,
   full_name VARCHAR(255),
   `role` ENUM('teacher', 'student') NOT NULL,
+  current_token_id VARCHAR(36) NULL UNIQUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

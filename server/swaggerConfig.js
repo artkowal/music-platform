@@ -1,4 +1,3 @@
-// Plik: server/swaggerConfig.js
 const options = {
   definition: {
     openapi: '3.0.0',
@@ -13,9 +12,20 @@ const options = {
         description: 'Lokalny serwer deweloperski',
       },
     ],
+    components: {
+      securitySchemes: {
+        cookieAuth: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'token', 
+        },
+      },
+    },
+    security: [{
+      cookieAuth: [],
+    }],
   },
-  // Ścieżka do plików komentarzy Swagger
-  apis: ['./server.js'], 
+  apis: ['./server.js', './routes/*.js'],
 };
 
 module.exports = options;
