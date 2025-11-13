@@ -6,11 +6,11 @@ A web platform for managing individual music lessons between teachers and studen
 
 ## 🚀 Tech Stack
 
--   **Frontend:** React, Vite, TypeScript, Tailwind CSS (pending setup), shadcn/ui (pending setup)
+-   **Frontend:** React, Vite, TypeScript, Tailwind CSS, shadcn/ui
 -   **Backend:** Node.js, Express.js
 -   **Database:** MySQL
 -   **Environment:** Docker & Docker Compose
--   **Tooling:** PhpMyAdmin
+-   **Tooling:** PhpMyAdmin, Swagger
 
 ---
 
@@ -25,14 +25,14 @@ This project is fully containerized. A single command will build and run the ent
 ### 1. Run the Environment
 
 1.  Clone this repository to your local machine.
-2.  Open a terminal in the project's root directory (`MUSIC-PLATFORM/`).
+2.  Open a terminal in the project's root directory.
 3.  Run the following command:
 
     ```bash
     docker-compose up --build
     ```
 
-    This will build the `client` and `server` images, pull the `mysql` and `phpmyadmin` images, and start all services.
+    This will build the `client` and `server` images, pull the `mysql` and `phpmyadmin` images, and start all services. The frontend and backend will auto-reload when you make changes to the code.
 
 ### 2. Accessing Services
 
@@ -41,33 +41,50 @@ Once all containers are running, the services will be available at these local a
 | Service | Local URL | Notes |
 | :--- | :--- | :--- |
 | **Frontend** | `http://localhost:5173` | React/Vite App (with HMR) |
-| **Backend** | `http://localhost:5001` | Express.js API |
+| **Backend API** | `http://localhost:5001` | Express.js API |
+| **API Docs** | `http://localhost:5001/api-docs` | Swagger UI |
 | **PhpMyAdmin** | `http://localhost:8081` | Database Management |
 | **Database** | `localhost:3308` | Port for external SQL clients |
 
 ---
 
-## ⚙️ Post-Setup: Initializing Tailwind & shadcn/ui
+## 🗃️ Database
 
-This project is pre-configured for shadcn/ui, but it must be **initialized** inside the running container after the first launch.
+The database is **automatically created and initialized** on the first run.
 
-1.  Ensure the containers are running (`docker-compose up`).
-2.  Open a **second terminal window**.
-3.  Execute into the running `frontend` container:
+The `docker-compose.yml` file maps the `./database` folder to the MySQL container's initialization directory. Any `.sql` files in that folder (like `init.sql`) are automatically executed when the `db` container starts for the first time.
 
+-   **Host:** `db` (for internal container communication)
+-   **User:** `root`
+-   **Password:** `admin`
+-   **Database Name:** `music-platform-db`
+
+---
+
+## 💡 Common Tasks
+
+### How to Reset the Database
+
+If you make changes to `init.sql` or want to clear all data and start fresh:
+
+1.  Stop the containers and **remove the persistent volume**:
+    ```bash
+    docker-compose down -v
+    ```
+2.  Restart the environment. This will force Docker to re-create the database from scratch:
+    ```bash
+    docker-compose up --build
+    ```
+
+### How to Access a Container Shell
+
+If you need to run commands (like `npm install`) inside a running container:
+
+-   **Frontend Container:**
     ```bash
     docker-compose exec frontend sh
     ```
-
-4.  Now, **inside the container's shell**, run the following commands to install Tailwind and initialize shadcn/ui:
-
-    ```sh
-    # 1. Install Tailwind CSS
-    npm install -D tailwindcss postcss autoprefixer
-    npx tailwindcss init -p
-
-    # 2. Initialize shadcn/ui (This will ask interactive questions)
-    npx shadcn-ui@latest init
+-   **Backend Container:**
+    ```bash
+    docker-compose exec backend sh
     ```
-
-5.  After the setup is complete, you can `exit` the container shell. The frontend will automatically reload with the new configuration.
