@@ -1,4 +1,4 @@
--- Ustawienie strefy czasowej (opcjonalne, ale dobra praktyka)
+-- Ustawienie strefy czasowej
 SET TIME_ZONE = '+00:00';
 
 -- 1. Tabela Użytkowników
@@ -6,9 +6,9 @@ CREATE TABLE IF NOT EXISTS Users (
   user_id INT AUTO_INCREMENT PRIMARY KEY,
   email VARCHAR(255) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
-  full_name VARCHAR(255),
+  first_name VARCHAR(100) NULL,
+  last_name VARCHAR(100) NULL,
   `role` ENUM('teacher', 'student') NOT NULL,
-  current_token_id VARCHAR(36) NULL UNIQUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -141,3 +141,14 @@ GROUP BY
   w.name,
   stat_year,
   stat_month;
+
+  -- 10. NOWA TABELA: Aktywne Tokeny (Sesje)
+CREATE TABLE IF NOT EXISTS User_Tokens (
+  token_id VARCHAR(36) PRIMARY KEY, -- UUIDv4
+  user_id INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  
+  FOREIGN KEY (user_id)
+    REFERENCES Users(user_id)
+    ON DELETE CASCADE
+);

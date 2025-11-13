@@ -2,44 +2,32 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const mysql = require('mysql2/promise');
 
-// Tworzymy pulę połączeń, aby móc jej używać w różnych funkcjach
-// (jest to wydajniejsze niż tworzenie nowego połączenia za każdym razem)
 let dbPool;
 const getPool = () => {
   if (!dbPool) {
     dbPool = mysql.createPool(process.env.DATABASE_URL);
   }
   return dbPool;
-}
+};
 
-// Generuje unikalny token ID, zapisuje go w DB i zwraca.
+// 'generateTokenId' TWORZY nowy token w tabeli 'User_Tokens' ===
 const generateTokenId = async (user) => {
   const pool = getPool();
-  let tokenId;
-  let userWithThisToken = null;
+  const tokenId = uuidv4(); // Generujemy nowy, unikalny ID
 
-  do {
-    tokenId = uuidv4();
-    const [rows] = await pool.execute(
-      'SELECT user_id FROM Users WHERE current_token_id = ?',
-      [tokenId]
-    );
-    userWithThisToken = rows[0];
-  } while (userWithThisToken);
-
-  // Zapisz nowy token ID w bazie danych dla tego użytkownika
+  // Zapisz nowy token ID w nowej tabeli
   await pool.execute(
-    'UPDATE Users SET current_token_id = ? WHERE user_id = ?',
+    'INSERT INTO User_Tokens (token_id, user_id) VALUES (?, ?)',
     [tokenId, user.user_id]
   );
 
   return tokenId;
 };
 
-// Tworzy podpisany token JWT na podstawie unikalnego ID.
+// Tworzy podpisany token JWT
 const createToken = (tokenId) => {
-  const payload = { id: tokenId };
-  const expiresIn = '30d'; // 30 dni
+  const payload = { id: tokenId }; // 'id' w tokenie JWT to nasz 'token_id' z tabeli 'User_Tokens'
+  const expiresIn = '30d'; 
   const jwtSecret = process.env.JWT_SECRET;
 
   if (!jwtSecret) {
@@ -54,9 +42,7 @@ const createToken = (tokenId) => {
   };
 };
 
-
-// Główna funkcja: generuje, tworzy i wysyła bezpieczne ciasteczko HttpOnly.
-
+// Główna funkcja
 const sendTokenResponse = async (user, statusCode, res) => {
   const tokenId = await generateTokenId(user);
   const token = createToken(tokenId);
@@ -66,41 +52,60 @@ const sendTokenResponse = async (user, statusCode, res) => {
       Date.now() + token.expiresInDays * 24 * 60 * 60 * 1000
     ),
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', // Wysyłaj tylko przez HTTPS na produkcji
+    secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
   };
 
-  // Usuń wrażliwe dane przed wysłaniem odpowiedzi
   const userResponse = { ...user };
   delete userResponse.password_hash;
-  delete userResponse.current_token_id;
 
   res
     .status(statusCode)
-    .cookie('token', token.accessToken, options) // Wyślij token w ciasteczku
+    .cookie('token', token.accessToken, options)
     .json({
       success: true,
       user: userResponse,
     });
 };
 
-// Weryfikuje token z ciasteczka i zwraca użytkownika z DB.
+// ==='decodeToken' sprawdza tabelę 'User_Tokens' ===
 const decodeToken = async (tokenPayload) => {
   try {
     if (!tokenPayload) return null;
 
     const pool = getPool();
     const jwtSecret = process.env.JWT_SECRET;
-    const decoded = jwt.verify(tokenPayload, jwtSecret);
+    const decoded = jwt.verify(tokenPayload, jwtSecret); // 'decoded.id' to nasz 'token_id'
 
-    // Znajdź użytkownika na podstawie token ID z bazy danych
-    const [rows] = await pool.execute(
-      'SELECT user_id, email, full_name, `role`, created_at FROM Users WHERE current_token_id = ?',
+    // 1. Sprawdź, czy ten token ID istnieje w naszej tabeli sesji
+    const [tokenRows] = await pool.execute(
+      'SELECT user_id FROM User_Tokens WHERE token_id = ?',
       [decoded.id]
     );
+
+    if (!tokenRows[0]) {
+      // Token nie istnieje w bazie (np. został wylogowany)
+      return null;
+    }
     
-    // Jeśli nie ma użytkownika (bo np. token został unieważniony przez wylogowanie), zwróć null
-    return rows[0] ? rows[0] : null;
+    const { user_id } = tokenRows[0];
+
+    // 2. Pobierz dane użytkownika
+    const [userRows] = await pool.execute(
+      'SELECT user_id, email, first_name, last_name, `role`, created_at FROM Users WHERE user_id = ?',
+      [user_id]
+    );
+
+    if (!userRows[0]) {
+      // Użytkownik powiązany z tym tokenem nie istnieje
+      return null;
+    }
+
+    // Zwracamy obiekt zawierający użytkownika ORAZ token ID tej sesji
+    return {
+      user: userRows[0],
+      tokenId: decoded.id 
+    };
 
   } catch (err) {
     // Jeśli token wygasł lub jest niepoprawny
@@ -108,16 +113,15 @@ const decodeToken = async (tokenPayload) => {
   }
 };
 
-// Czyści ciasteczko po stronie klienta.
+// Czyści ciasteczko
 const deleteJwtCookie = (res) => {
   res.cookie('token', 'none', {
-    expires: new Date(Date.now() + 10 * 1000), // Wygasa za 10 sekund
+    expires: new Date(Date.now() + 10 * 1000),
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
   });
 };
-
 
 module.exports = {
   sendTokenResponse,

@@ -1,4 +1,3 @@
-// server/routes/user.js
 const express = require('express');
 const mysql = require('mysql2/promise');
 const { hashPassword } = require('../utils/password');
@@ -19,7 +18,7 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  * /api/user/register:
  *   post:
  *     summary: Rejestruje nowego użytkownika
- *     description: Tworzy nowe konto użytkownika. Alias dla `/api/auth/register`, zachowany dla spójności struktury API.
+ *     description: Tworzy nowe konto użytkownika.
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -30,7 +29,8 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  *             required:
  *               - email
  *               - password
- *               - fullName
+ *               - firstName
+ *               - lastName
  *               - role
  *             properties:
  *               email:
@@ -39,9 +39,12 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  *               password:
  *                 type: string
  *                 example: "password123"
- *               fullName:
+ *               firstName:
  *                 type: string
- *                 example: "Adam Nowak"
+ *                 example: "Adam"
+ *               lastName:
+ *                 type: string
+ *                 example: "Nowak"
  *               role:
  *                 type: string
  *                 enum: [teacher, student]
@@ -53,9 +56,9 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  *         description: Błędne dane wejściowe lub użytkownik już istnieje.
  */
 router.post('/register', async (req, res) => {
-  const { email, password, fullName, role } = req.body;
+  const { email, password, firstName, lastName, role } = req.body;
 
-  if (!email || !password || !fullName || !role) {
+  if (!email || !password || !firstName || !lastName || !role) {
     return res.status(400).json({
       success: false,
       message: 'Proszę podać wszystkie wymagane dane.',
@@ -66,12 +69,12 @@ router.post('/register', async (req, res) => {
     const hashedPassword = await hashPassword(password);
 
     const [result] = await dbPool.execute(
-      'INSERT INTO Users (email, password_hash, full_name, `role`) VALUES (?, ?, ?, ?)',
-      [email, hashedPassword, fullName, role]
+      'INSERT INTO Users (email, password_hash, first_name, last_name, `role`) VALUES (?, ?, ?, ?, ?)',
+      [email, hashedPassword, firstName, lastName, role]
     );
 
     const [newUser] = await dbPool.execute(
-      'SELECT user_id, email, full_name, `role`, created_at FROM Users WHERE user_id = ?',
+      'SELECT user_id, email, first_name, last_name, `role`, created_at FROM Users WHERE user_id = ?',
       [result.insertId]
     );
 
@@ -80,7 +83,8 @@ router.post('/register', async (req, res) => {
     console.error('Registration error:', error.message);
     res.status(400).json({
       success: false,
-      message: 'Nie udało się zarejestrować użytkownika — prawdopodobnie email już istnieje.',
+      message:
+        'Nie udało się zarejestrować użytkownika — prawdopodobnie email już istnieje.',
     });
   }
 });

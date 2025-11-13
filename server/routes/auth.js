@@ -1,18 +1,11 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
-const { hashPassword, comparePassword } = require('../utils/password');
+const { comparePassword } = require('../utils/password');
 const { sendTokenResponse, deleteJwtCookie } = require('../utils/jwt');
 const { protect } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 const dbPool = mysql.createPool(process.env.DATABASE_URL);
-
-/**
- * @swagger
- * tags:
- *   - name: Auth
- *     description: Uwierzytelnianie użytkowników
- */
 
 /**
  * @swagger
@@ -28,21 +21,18 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  *       properties:
  *         user_id:
  *           type: integer
- *           description: ID użytkownika.
  *         email:
  *           type: string
- *           description: Email użytkownika.
- *         full_name:
+ *         first_name:
  *           type: string
- *           description: Imię i nazwisko użytkownika.
+ *         last_name:
+ *           type: string
  *         role:
  *           type: string
  *           enum: [teacher, student]
- *           description: Rola użytkownika.
  *         created_at:
  *           type: string
  *           format: date-time
- *           description: Data utworzenia konta.
  */
 
 /**
@@ -50,6 +40,7 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  * /api/auth/login:
  *   post:
  *     summary: Loguje użytkownika
+ *     description: Sprawdza dane logowania i generuje token sesji.
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -63,13 +54,15 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  *             properties:
  *               email:
  *                 type: string
- *                 example: "uczen@example.com"
+ *                 example: "nauczyciel@example.com"
  *               password:
  *                 type: string
  *                 example: "password123"
  *     responses:
  *       200:
- *         description: Pomyślnie zalogowano. Zwraca token w ciasteczku HttpOnly.
+ *         description: Pomyślnie zalogowano. Token zwrócony w ciasteczku HttpOnly.
+ *       400:
+ *         description: Brak wymaganych danych.
  *       401:
  *         description: Nieprawidłowy email lub hasło.
  */
@@ -99,16 +92,16 @@ router.post('/login', async (req, res) => {
  * @swagger
  * /api/auth/logout:
  *   post:
- *     summary: Wylogowuje użytkownika (unieważnia token)
+ *     summary: Wylogowuje użytkownika (unieważnia BIEŻĄCY token)
  *     tags: [Auth]
  *     security:
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Pomyślnie wylogowano (czyści ciasteczko i unieważnia token w DB).
+ *         description: Pomyślnie wylogowano (usuwa token sesji z DB i czyści ciasteczko).
  */
 router.post('/logout', protect, async (req, res) => {
-  await dbPool.execute('UPDATE Users SET current_token_id = NULL WHERE user_id = ?', [req.user.user_id]);
+  await dbPool.execute('DELETE FROM User_Tokens WHERE token_id = ?', [req.tokenId]);
   deleteJwtCookie(res);
   res.status(200).json({ success: true, message: 'Pomyślnie wylogowano.' });
 });
@@ -117,19 +110,22 @@ router.post('/logout', protect, async (req, res) => {
  * @swagger
  * /api/auth/check:
  *   get:
- *     summary: Sprawdza, czy użytkownik jest zalogowany (chronione)
+ *     summary: Sprawdza aktualną sesję użytkownika
  *     tags: [Auth]
  *     security:
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Użytkownik jest zalogowany, zwraca dane użytkownika.
+ *         description: Zwraca dane zalogowanego użytkownika.
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/User'
- *       401:
- *         description: Brak autoryzacji.
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
  */
 router.get('/check', protect, (req, res) => {
   res.status(200).json({
