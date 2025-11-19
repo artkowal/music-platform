@@ -2,39 +2,38 @@ import { Routes, Route } from "react-router-dom";
 import HomePage from "@/pages/HomePage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
-import DashboardPage from "@/pages/DashboardPage";
 
 import ProtectedRoute from "@/components/layouts/ProtectedRoute";
 import RedirectIfAuth from "@/components/layouts/RedirectIfAuth";
 import MainLayout from "@/components/layouts/MainLayout";
 
+import DashboardLayout from "@/components/layouts/DashboardLayout";
+import DashboardOverviewPage from "@/pages/dashboard/DashboardOverviewPage";
+import DashboardSettingsPage from "@/pages/dashboard/DashboardSettingsPage";
+import DashboardAboutPage from "@/pages/dashboard/DashboardAboutPage";
+
 function App() {
   return (
     <Routes>
-      {/* === 1. Trasy dla NIEZALOGOWANYCH UŻYTKOWNIKÓW === */}
-      {/* Jeśli user jest zalogowany, przekierują na /dashboard */}
+      {/* Niezalogowani uzytkownicy*/}
       <Route element={<RedirectIfAuth />}>
-        
-        {/* Trasy publiczne Z Navbarem */}
         <Route element={<MainLayout />}>
           <Route path="/" element={<HomePage />} />
         </Route>
 
-        {/* Trasy publiczne BEZ Navbara (logowanie, rejestracja) */}
+        {/* Trasy publiczne BEZ Navbara */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
       </Route>
 
-      {/* === 2. Trasy dla ZALOGOWANYCH UŻYTKOWNIKÓW === */}
-      {/* Wymagają logowania (ProtectedRoute) i MAJĄ Navbar (MainLayout) */}
+      {/* Zalogowani uzytkownicy */}
       <Route element={<ProtectedRoute />}>
-        <Route element={<MainLayout />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/dashboard" element={<DashboardLayout />}>
+          <Route index element={<DashboardOverviewPage />} />
+          <Route path="settings" element={<DashboardSettingsPage />} />
+          <Route path="about" element={<DashboardAboutPage />} />
         </Route>
       </Route>
-
-      {/* TODO: NotFoundPage */}
-      {/* <Route path="*" element={<NotFoundPage />} /> */}
     </Routes>
   );
 }

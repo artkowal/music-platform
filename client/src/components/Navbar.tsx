@@ -1,5 +1,7 @@
+"use client";
+
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LogIn, UserPlus, Menu, X, LogOut, LayoutDashboard } from "lucide-react";
@@ -14,18 +16,40 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Separator } from "@/components/ui/separator";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+
+const getBreadcrumbName = (path: string) => {
+  if (path.endsWith("/settings")) return "Ustawienia";
+  if (path.endsWith("/about")) return "O Projekcie";
+  if (path.endsWith("/courses")) return "Moje kursy";
+  if (path.endsWith("/students")) return "Uczniowie";
+  if (path.endsWith("/my-learning")) return "Moja nauka";
+  return "Przegląd";
+};
 
 export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isDashboard = location.pathname.startsWith("/dashboard");
+  const breadcrumbName = isDashboard ? getBreadcrumbName(location.pathname) : "";
 
   const handleLogout = async () => {
     await logout();
-    navigate("/"); 
+    navigate("/");
   };
 
-  // Funkcja do pobierania inicjałów
   const getInitials = (firstName: string = '', lastName: string = '') => {
     const fNameInitial = firstName ? firstName[0] : '';
     const lNameInitial = lastName ? lastName[0] : '';
@@ -35,27 +59,55 @@ export default function Navbar() {
   const fullName = user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : '';
   const initials = user ? getInitials(user.first_name, user.last_name) : '??';
 
-
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-sm">
+    <header className={cn(
+      "top-0 z-50 bg-background/80 backdrop-blur-sm",
+      isDashboard ? "sticky" : "fixed left-0 right-0"
+    )}>
       <nav className="flex h-16 items-center justify-between px-4">
-        {/* Logo i Nazwa Aplikacji */}
-        <Link 
-          to="/" 
-          className="flex items-center gap-3"
-          onClick={() => setIsMobileMenuOpen(false)}
-        >
-          <img src={logo} alt="MusicDesk Logo" className="h-8 w-8" />
-          <span className="text-xl font-bold text-text-primary">
-            MusicDesk
-          </span>
-        </Link>
+        
+        <div className="flex items-center gap-3">
+          {isDashboard ? (
+            // WIDOK DLA DASHBOARDU
+            <>
+              <SidebarTrigger className="-ml-1" />
+              <Separator
+                orientation="vertical"
+                className="mr-2 data-[orientation=vertical]:h-4"
+              />
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem className="hidden md:block">
+                    <BreadcrumbLink asChild>
+                      <Link to="/dashboard">Dashboard</Link>
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator className="hidden md:block" />
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>{breadcrumbName}</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            </>
+          ) : (
+            // WIDOK PUBLICZNY
+            <Link
+              to="/"
+              className="flex items-center gap-3"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              <img src={logo} alt="MusicDesk Logo" className="h-8 w-8" />
+              <span className="text-xl font-bold text-text-primary">
+                MusicDesk
+              </span>
+            </Link>
+          )}
+        </div>
 
-        {/* --- NAWIGACJA DESKTOPOWA --- */}
+        {/* PRAWA STRONA */}
         <div className="hidden items-center gap-3 md:flex">
           <ThemeToggle />
           {user ? (
-            // === Dropdown dla Desktopu ===
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full">
@@ -87,7 +139,6 @@ export default function Navbar() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            // Widok dla NIEZALOGOWANEGO użytkownika (Desktop)
             <>
               <Button asChild variant="outline">
                 <Link to="/login">
@@ -105,10 +156,11 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* --- PRZYCISKI MOBILNE (Hamburger i Motyw) --- */}
+        {/* PRZYCISKI MOBILNE */}
         <div className="flex items-center gap-2 md:hidden">
           <ThemeToggle />
-          {!user && (
+          
+          {!user && !isDashboard && (
             <Button
               variant="ghost"
               size="icon"
@@ -119,7 +171,6 @@ export default function Navbar() {
             </Button>
           )}
           
-          {/* === Zaktualizowany Dropdown dla Mobilki === */}
           {user && (
              <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -155,26 +206,17 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {/* --- WYSUWANE MENU MOBILNE (Dla niezalogowanych) --- */}
+      {/* WYSUWANE MENU MOBILNE */}
       {isMobileMenuOpen && !user && (
         <div className="absolute top-16 left-0 w-full animate-accordion-down border-t bg-background p-4 shadow-md md:hidden">
           <div className="flex flex-col gap-4">
-            <Button 
-              asChild 
-              variant="outline" 
-              className="w-full"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
+            <Button asChild variant="outline" className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
               <Link to="/login">
                 <LogIn className="mr-2 h-4 w-4" />
                 Zaloguj się
               </Link>
-            </Button>
-            <Button 
-              asChild 
-              className="w-full"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
+              </Button>
+            <Button asChild className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
               <Link to="/register">
                 <UserPlus className="mr-2 h-4 w-4" />
                 Zarejestruj się
