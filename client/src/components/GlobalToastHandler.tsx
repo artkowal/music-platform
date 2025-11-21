@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { api } from "@/lib/utils";
+import { api } from "@/api/axios";
 import type { AxiosResponse, AxiosError } from "axios";
 
 export function GlobalToastHandler() {

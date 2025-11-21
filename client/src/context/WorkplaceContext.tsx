@@ -1,12 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { api } from '@/lib/utils';
-
-export type Workplace = {
-  workplace_id: number;
-  name: string;
-  color_hex: string;
-};
+import { workplacesApi } from '@/api/workplaces';
+import type { Workplace } from '@/types/Workplace';
 
 interface WorkplaceContextType {
   workplaces: Workplace[];
@@ -41,14 +36,13 @@ export const WorkplaceProvider = ({ children }: { children: ReactNode }) => {
   const refreshWorkplaces = async () => {
     setIsLoading(true);
     try {
-      const res = await api.get('/workplaces');
-      const data = res.data.data || [];
+      const data = await workplacesApi.getAll();
       setWorkplaces(data);
 
       const storedId = localStorage.getItem('active_workplace_id');
       
       if (data.length > 0) {
-        const found = data.find((w: Workplace) => w.workplace_id.toString() === storedId);
+        const found = data.find((w) => w.workplace_id.toString() === storedId);
         setActiveWorkplaceState(found || data[0]);
       } else {
         setActiveWorkplaceState(null);

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { api } from "@/lib/utils";
+import { coursesApi } from "@/api/courses";
+import { usersApi } from "@/api/users";
 import { useWorkplace } from "@/context/WorkplaceContext";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription
@@ -44,9 +45,8 @@ export function CreateCourseDialog({ children, open, onOpenChange, onSuccess }: 
         return;
       }
       try {
-        const res = await api.get(`/user/search?query=${currentEmail}`);
-        // Filtruje emaile, które już są na liście
-        setSuggestions(res.data.emails.filter((email: string) => !studentEmails.includes(email)));
+        const emails = await usersApi.search(currentEmail);
+        setSuggestions(emails.filter((email: string) => !studentEmails.includes(email)));
       } catch (error) {
         console.error("Błąd pobierania podpowiedzi", error);
       }
@@ -66,7 +66,7 @@ export function CreateCourseDialog({ children, open, onOpenChange, onSuccess }: 
 
   const handleSelectSuggestion = (email: string) => {
     setCurrentEmail(email);
-    setSuggestions([]); // Ukrywamy listę po wyborze
+    setSuggestions([]); 
   };
 
   const handleRemoveEmail = (email: string) => {
@@ -76,7 +76,6 @@ export function CreateCourseDialog({ children, open, onOpenChange, onSuccess }: 
   const handleSubmit = async () => {
     if (!title) return;
 
-    // wymusza kliknięcie +
     if (currentEmail.trim().length > 0) {
       alert("Wpisałeś adres email, ale go nie dodałeś. Kliknij ikonę '+' (plus) obok pola adresu, aby dodać ucznia do listy.");
       return;
@@ -84,7 +83,7 @@ export function CreateCourseDialog({ children, open, onOpenChange, onSuccess }: 
 
     setIsSubmitting(true);
     try {
-      await api.post("/courses", { 
+      await coursesApi.create({ 
         title, 
         description,
         course_type: courseType,
@@ -92,7 +91,6 @@ export function CreateCourseDialog({ children, open, onOpenChange, onSuccess }: 
         student_emails: studentEmails
       });
       
-      // Reset formularza
       setTitle("");
       setDescription("");
       setStudentEmails([]);

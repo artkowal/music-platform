@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { CreateWorkplaceDialog } from "@/components/dialogs/CreateWorkplaceDialog";
 import { Plus, School } from "lucide-react";
-import type { Workplace } from "@/context/WorkplaceContext";
+import type { Workplace } from "@/types/Workplace";
 import { SortableWorkplaceItem } from "./SortableWorkplaceItem";
 
 interface Props {

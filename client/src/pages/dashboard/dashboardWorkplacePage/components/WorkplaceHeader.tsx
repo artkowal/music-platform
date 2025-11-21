@@ -1,5 +1,5 @@
 import { School, Briefcase, Users } from "lucide-react";
-import type { Workplace } from "@/context/WorkplaceContext";
+import type { Workplace } from "@/types/Workplace";
 import { hexToRgba } from "@/lib/colors";
 
 interface WorkplaceHeaderProps {

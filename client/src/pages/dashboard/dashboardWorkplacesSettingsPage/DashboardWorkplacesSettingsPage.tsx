@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { api } from "@/lib/utils";
-import { useWorkplace, type Workplace } from "@/context/WorkplaceContext";
+import { workplacesApi } from "@/api/workplaces";
+import { useWorkplace } from "@/context/WorkplaceContext";
+import type { Workplace } from "@/types/Workplace";
 import { arrayMove } from '@dnd-kit/sortable';
 import type { DragEndEvent } from '@dnd-kit/core';
 
@@ -30,7 +31,7 @@ export default function DashboardWorkplacesSettingsPage() {
           sort_order: index
       }));
       try {
-          await api.put('/workplaces/reorder/all', { items: payload });
+          await workplacesApi.reorder(payload);
           await refreshWorkplaces();
       } catch (error) {
           console.error("Błąd zapisu kolejności", error);
@@ -41,7 +42,7 @@ export default function DashboardWorkplacesSettingsPage() {
   const handleDeleteWorkplace = async (id: number) => {
     if (!confirm("Czy na pewno chcesz usunąć tę placówkę? Kursy zostaną 'Prywatne'.")) return;
     try {
-      await api.delete(`/workplaces/${id}`);
+      await workplacesApi.delete(id);
       await refreshWorkplaces();
     } catch {
       alert("Błąd usuwania placówki");
@@ -50,7 +51,7 @@ export default function DashboardWorkplacesSettingsPage() {
 
   const handleRenameWorkplace = async (id: number, newName: string) => {
       try {
-          await api.put(`/workplaces/${id}`, { name: newName });
+          await workplacesApi.update(id, { name: newName });
           await refreshWorkplaces(); 
       } catch {
           alert("Błąd zmiany nazwy");

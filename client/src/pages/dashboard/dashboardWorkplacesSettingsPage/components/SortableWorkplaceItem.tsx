@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Trash2, GripVertical, Pencil, Save, X, Building2 } from "lucide-react";
-import type { Workplace } from "@/context/WorkplaceContext";
+import type { Workplace } from "@/types/Workplace";
 
 interface Props {
     workplace: Workplace;

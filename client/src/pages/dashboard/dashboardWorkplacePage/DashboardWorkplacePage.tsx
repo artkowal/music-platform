@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { api } from "@/lib/utils";
-import { useWorkplace, type Workplace } from "@/context/WorkplaceContext";
+import { useParams } from "react-router-dom";
+import { workplacesApi } from "@/api/workplaces";
+import { coursesApi } from "@/api/courses";
+import { useWorkplace } from "@/context/WorkplaceContext";
+import type { Workplace } from "@/types/Workplace";
 import { useAuth } from "@/hooks/useAuth";
 import { hexToHsl } from "@/lib/colors";
 import type { Course } from "@/types/Course";
@@ -11,7 +13,6 @@ import { WorkplaceCourseList } from "./components/WorkplaceCourseList";
 
 export default function DashboardWorkplacePage() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const { setActiveWorkplace } = useWorkplace();
   const { user } = useAuth();
   
@@ -22,15 +23,15 @@ export default function DashboardWorkplacePage() {
   const isTeacher = user?.role === 'teacher';
 
   const fetchData = async () => {
+    if (!id) return;
     setLoading(true);
     try {
-      const wpRes = await api.get(`/workplaces/${id}`);
-      const wpData = wpRes.data.data;
+      const wpData = await workplacesApi.getOne(id);
       setWorkplace(wpData);
       setActiveWorkplace(wpData);
 
-      const coursesRes = await api.get("/courses");
-      const wpCourses = coursesRes.data.data.filter((c: Course) => c.workplace_id === Number(id));
+      const allCourses = await coursesApi.getAll();
+      const wpCourses = allCourses.filter((c: Course) => c.workplace_id === Number(id));
       setCourses(wpCourses);
 
     } catch (error) {
@@ -41,14 +42,14 @@ export default function DashboardWorkplacePage() {
   };
 
   useEffect(() => {
-    if (id) fetchData();
+    fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const handleDeleteCourse = async (courseId: number) => {
     if (!confirm("Czy na pewno chcesz usunąć ten kurs bezpowrotnie?")) return;
     try {
-      await api.delete(`/courses/${courseId}`);
+      await coursesApi.delete(courseId);
       fetchData(); 
     } catch (error) {
       console.error(error);
@@ -57,7 +58,7 @@ export default function DashboardWorkplacePage() {
   };
 
   const handleEditCourse = (course: Course) => {
-    navigate(`/dashboard/courses/${course.course_id}/settings`);
+    console.log("Edycja kursu:", course);
   };
 
   if (loading) return <div className="p-8">Ładowanie placówki...</div>;

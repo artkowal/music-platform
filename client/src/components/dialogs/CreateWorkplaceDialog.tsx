@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "@/lib/utils";
+import { workplacesApi } from "@/api/workplaces";
 import { useWorkplace } from "@/context/WorkplaceContext";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription
@@ -32,8 +32,8 @@ export function CreateWorkplaceDialog({ children, open, onOpenChange }: Props) {
   const { refreshWorkplaces } = useWorkplace();
   
   const [name, setName] = useState("");
-  const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[7]); // Domyślny Indigo
-  const [paymentType, setPaymentType] = useState("none");
+  const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[7]); 
+  const [paymentType, setPaymentType] = useState<"none" | "per_lesson" | "monthly">("none");
   const [paymentAmount, setPaymentAmount] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,7 +42,7 @@ export function CreateWorkplaceDialog({ children, open, onOpenChange }: Props) {
     if (!name) return;
     setIsSubmitting(true);
     try {
-      await api.post("/workplaces", { 
+      await workplacesApi.create({ 
         name, 
         color_hex: selectedColor,
         payment_type: paymentType,
@@ -116,7 +116,7 @@ export function CreateWorkplaceDialog({ children, open, onOpenChange }: Props) {
           <div className="grid gap-4 p-4 border rounded-lg bg-muted/20">
              <div className="grid gap-2">
                 <Label>Model rozliczeń (dla statystyk)</Label>
-                <Select value={paymentType} onValueChange={setPaymentType}>
+                <Select value={paymentType} onValueChange={(val: "none" | "per_lesson" | "monthly") => setPaymentType(val)}>
                     <SelectTrigger>
                         <SelectValue />
                     </SelectTrigger>

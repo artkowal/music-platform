@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "@/lib/utils";
+import { coursesApi } from "@/api/courses";
 import { useWorkplace } from "@/context/WorkplaceContext";
 import { useAuth } from "@/hooks/useAuth";
 import { AllCoursesHeader } from "./components/AllCoursesHeader";
@@ -17,8 +17,8 @@ export default function DashboardAllCoursesPage() {
   const fetchCourses = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/courses");
-      setCourses(res.data.data);
+      const data = await coursesApi.getAll();
+      setCourses(data);
     } catch (error) {
       console.error("Błąd pobierania kursów", error);
     } finally {
@@ -35,7 +35,7 @@ export default function DashboardAllCoursesPage() {
   const handleDeleteCourse = async (courseId: number) => {
     if (!confirm("Czy na pewno chcesz usunąć ten kurs bezpowrotnie?")) return;
     try {
-        await api.delete(`/courses/${courseId}`);
+        await coursesApi.delete(courseId);
         await fetchCourses();
     } catch (error) {
         console.error(error);

@@ -6,14 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Save } from "lucide-react";
-import type { Workplace } from "@/context/WorkplaceContext";
-
-export type CourseData = {
-  title: string;
-  description: string;
-  course_type: string;
-  workplace_id: string;
-};
+import type { Workplace } from "@/types/Workplace";
+import type { CourseData } from "@/types/Course";
 
 interface CourseEditFormProps {
   initialData: CourseData;

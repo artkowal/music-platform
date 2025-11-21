@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { api } from "@/lib/utils";
+import { coursesApi } from "@/api/courses";
 import { useWorkplace } from "@/context/WorkplaceContext";
 import type { Student } from "@/types/Student";
+import type { CourseData } from "@/types/Course";
 
 import { CourseSettingsHeader } from "./components/CourseSettingsHeader";
-import { CourseEditForm, type CourseData } from "./components/CourseEditForm";
+import { CourseEditForm } from "./components/CourseEditForm";
 import { StudentManagement } from "./components/StudentManagement";
 
 export default function DashboardCourseSettingsPage() {
@@ -25,9 +26,9 @@ export default function DashboardCourseSettingsPage() {
     const [students, setStudents] = useState<Student[]>([]);
 
     const fetchData = async () => {
+        if (!id) return;
         try {
-            const res = await api.get(`/courses/${id}/details`);
-            const { course, students } = res.data;
+            const { course, students } = await coursesApi.getDetails(id);
             
             setCourseData({
                 title: course.title,
@@ -46,14 +47,15 @@ export default function DashboardCourseSettingsPage() {
     };
 
     useEffect(() => {
-        if (id) fetchData();
+        fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
     // HANDLERY
     const handleSaveCourse = async (data: CourseData) => {
+        if (!id) return;
         try {
-            await api.put(`/courses/${id}`, {
+            await coursesApi.update(id, {
                 title: data.title,
                 description: data.description,
                 course_type: data.course_type,
@@ -66,8 +68,9 @@ export default function DashboardCourseSettingsPage() {
     };
 
     const handleAddStudent = async (email: string) => {
+        if (!id) return;
         try {
-            await api.post(`/courses/${id}/enroll`, { email });
+            await coursesApi.enrollStudent(id, email);
             await fetchData();
         } catch (error) {
             console.error(error);
@@ -75,9 +78,10 @@ export default function DashboardCourseSettingsPage() {
     };
 
     const handleRemoveStudent = async (studentId: number) => {
+        if (!id) return;
         if (!confirm("Czy na pewno usunąć tego ucznia z kursu?")) return;
         try {
-            await api.delete(`/courses/${id}/students/${studentId}`);
+            await coursesApi.removeStudent(id, studentId);
             setStudents(prev => prev.filter(s => s.user_id !== studentId));
         } catch (error) {
             console.error(error);
