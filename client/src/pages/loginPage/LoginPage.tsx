@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import logo from "@/assets/logo.png";
-import { LoginForm } from "@/components/LoginForm"; 
+import { LoginForm } from "@/pages/loginPage/components/LoginForm"; 
 
 export default function LoginPage() {
 
