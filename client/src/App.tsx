@@ -2,9 +2,9 @@ import { Routes, Route } from "react-router-dom";
 import { GlobalToastHandler } from "./components/GlobalToastHandler";
 import { Toaster } from "./components/ui/toaster";
 
-import HomePage from "@/pages/HomePage";
-import LoginPage from "@/pages/LoginPage";
-import RegisterPage from "@/pages/RegisterPage";
+import HomePage from "@/pages/homePage/HomePage";
+import LoginPage from "@/pages/loginPage/LoginPage";
+import RegisterPage from "@/pages/RegisterPage/RegisterPage";
 
 import ProtectedRoute from "@/components/layouts/ProtectedRoute";
 import RedirectIfAuth from "@/components/layouts/RedirectIfAuth";
@@ -41,7 +41,7 @@ function App() {
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardOverviewPage />} />
-          
+
           <Route path="workplace/:id" element={<DashboardWorkplacePage />} />
           <Route path="workplaces" element={<DashboardWorkplacesSettingsPage />} />
 

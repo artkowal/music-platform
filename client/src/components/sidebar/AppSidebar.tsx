@@ -6,8 +6,8 @@ import {
   SidebarContent,
   SidebarHeader,
 } from "@/components/ui/sidebar"
-import { DashboardNavMain } from "../DashboardNavMain"
-import { SidebarLogo } from "../SidebarLogo"
+import { DashboardNavMain } from "./components/DashboardNavMain"
+import { SidebarLogo } from "./components/SidebarLogo"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
