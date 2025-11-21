@@ -7,17 +7,15 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar"
 import { DashboardNavMain } from "./DashboardNavMain"
-import { DashboardTeamSwitcher } from "./DashboardTeamSwitcher"
+import { SidebarLogo } from "./SidebarLogo"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       
-      {/* Przełącznik Placówek */}
       <SidebarHeader>
-        <DashboardTeamSwitcher />
+        <SidebarLogo />
       </SidebarHeader>
-
 
       <SidebarContent>
         <DashboardNavMain />

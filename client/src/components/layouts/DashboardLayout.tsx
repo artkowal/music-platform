@@ -5,9 +5,11 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar";
+import { WorkplaceProvider } from "@/context/WorkplaceContext";
 
 export default function DashboardLayout() {
   return (
+    <WorkplaceProvider>
     <SidebarProvider>
 
       <AppSidebar />
@@ -21,5 +23,6 @@ export default function DashboardLayout() {
         </main>
       </SidebarInset>
     </SidebarProvider>
+    </WorkplaceProvider>
   );
 }

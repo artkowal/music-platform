@@ -1,16 +1,23 @@
 "use client"
 
-import { Home, Settings, Info, Briefcase, GraduationCap, Users, Library, CalendarDays, type LucideIcon } from "lucide-react";
+import { useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { 
+  Home, Settings, Info, Briefcase, GraduationCap, 
+  Users, CalendarDays, Plus, Settings2, School, type LucideIcon 
+} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { NavLink } from "react-router-dom";
+import { useWorkplace } from "@/context/WorkplaceContext";
+import { CreateWorkplaceDialog } from "@/components/dialogs/CreateWorkplaceDialog";
 import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
 } from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type NavItem = {
   title: string;
@@ -18,50 +25,29 @@ type NavItem = {
   icon: LucideIcon;
 };
 
-// Komponent renderujący link
-const NavItemLink = ({ item }: { item: NavItem }) => {
-  const { title, url, icon: Icon } = item;
-
-  // Funkcja do stylowania NavLink
-  const getNavLinkClass = ({ isActive }: { isActive: boolean }) =>
-    cn(
-      isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
-    );
-
-  return (
-    <SidebarMenuItem key={title} className="p-0">
-      <SidebarMenuButton asChild tooltip={title}>
-        <NavLink 
-          to={url} 
-          end={url === "/dashboard"} 
-          className={getNavLinkClass}
-        >
-          <Icon className="h-4 w-4" />
-          <span className="group-data-[collapsible=icon]/sidebar-wrapper:hidden">
-            {title}
-          </span>
-        </NavLink>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
-  );
-};
-
 export function DashboardNavMain() {
   const { user } = useAuth();
+  const { workplaces, setActiveWorkplace } = useWorkplace();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  
   const isTeacher = user?.role === 'teacher';
 
-  const teacherNavItems: NavItem[] = [
+  const isLinkActive = (url: string) => {
+    if (url === "/dashboard") return location.pathname === "/dashboard";
+    return location.pathname.startsWith(url);
+  };
+
+  const mainNavItems: NavItem[] = isTeacher ? [
     { title: "Przegląd", url: "/dashboard", icon: Home },
+    { title: "Wszystkie Kursy", url: "/dashboard/courses", icon: Briefcase },
     { title: "Kalendarz", url: "/dashboard/calendar", icon: CalendarDays },
-    { title: "Kursy", url: "/dashboard/courses", icon: Briefcase },
-    { title: "Uczniowie", url: "/dashboard/students", icon: Users },
-    { title: "Zarządzaj Placówkami", url: "/dashboard/workplaces", icon: Library },
-  ];
-  
-  const studentNavItems: NavItem[] = [
+    { title: "Wszyscy Uczniowie", url: "/dashboard/students", icon: Users },
+  ] : [
     { title: "Przegląd", url: "/dashboard", icon: Home },
-    { title: "Mój Kalendarz", url: "/dashboard/calendar", icon: CalendarDays },
     { title: "Moje Kursy", url: "/dashboard/courses", icon: GraduationCap },
+    { title: "Mój Kalendarz", url: "/dashboard/calendar", icon: CalendarDays },
   ];
 
   const accountNavItems: NavItem[] = [
@@ -69,30 +55,128 @@ export function DashboardNavMain() {
     { title:"O Projekcie", url: "/dashboard/about", icon: Info },
   ];
 
-  const mainNavItems = isTeacher ? teacherNavItems : studentNavItems;
-
   return (
-    <SidebarGroup>
-      
-      {/* Linki Główne */}
-      <SidebarGroupLabel className="group-data-[collapsible=icon]/sidebar-wrapper:hidden">
-        {isTeacher ? "Zarządzanie" : "Platforma"}
-      </SidebarGroupLabel>
-      <SidebarMenu>
-        {mainNavItems.map((item) => (
-          <NavItemLink key={item.url} item={item} />
-        ))}
-      </SidebarMenu>
+    <>
+      <CreateWorkplaceDialog 
+        open={isCreateDialogOpen} 
+        onOpenChange={setIsCreateDialogOpen} 
+      />
 
-      {/* Linki Ustawień */}
-      <SidebarGroupLabel className="mt-4 group-data-[collapsible=icon]/sidebar-wrapper:hidden">
-        Konto
-      </SidebarGroupLabel>
-      <SidebarMenu>
-        {accountNavItems.map((item) => (
-          <NavItemLink key={item.url} item={item} />
-        ))}
-      </SidebarMenu>
-    </SidebarGroup>
+      <SidebarGroup>
+        <SidebarGroupLabel>Platforma</SidebarGroupLabel>
+        <SidebarMenu>
+          {mainNavItems.map((item) => {
+            const active = isLinkActive(item.url);
+            return (
+              <SidebarMenuItem key={item.url}>
+                <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
+                  <Link to={item.url}>
+                    <item.icon className="size-4" />
+                    <span>{item.title}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
+      </SidebarGroup>
+
+      <SidebarSeparator className="mx-0" />
+
+      {isTeacher && (
+        <SidebarGroup>
+          <div className="absolute right-2 top-3.5 flex items-center gap-1 group-data-[collapsible=icon]:hidden">
+             <Tooltip>
+               <TooltipTrigger asChild>
+                 <button 
+                   onClick={() => setIsCreateDialogOpen(true)}
+                   className="text-muted-foreground hover:text-foreground p-0.5 rounded-md hover:bg-sidebar-accent transition-colors"
+                 >
+                     <Plus className="size-4" />
+                 </button>
+               </TooltipTrigger>
+               <TooltipContent>Dodaj nową placówkę</TooltipContent>
+             </Tooltip>
+
+             <Tooltip>
+                <TooltipTrigger asChild>
+                   <button 
+                      onClick={() => navigate('/dashboard/workplaces')}
+                      className="text-muted-foreground hover:text-foreground p-0.5 rounded-md hover:bg-sidebar-accent transition-colors"
+                   >
+                      <Settings2 className="size-4" />
+                   </button>
+                </TooltipTrigger>
+                <TooltipContent>Zarządzaj placówkami</TooltipContent>
+             </Tooltip>
+          </div>
+
+          <SidebarGroupLabel>Placówki</SidebarGroupLabel>
+
+          <SidebarMenu>
+            {workplaces.length === 0 && (
+                <div className="px-2 py-4 text-xs text-center text-muted-foreground border border-dashed rounded-md m-2 group-data-[collapsible=icon]:hidden">
+                    Brak placówek. <br/> Kliknij "+" aby dodać.
+                </div>
+            )}
+
+            {workplaces.map((wp) => {
+              const wpUrl = `/dashboard/workplace/${wp.workplace_id}`;
+              const active = location.pathname === wpUrl;
+              
+              return (
+                <SidebarMenuItem key={wp.workplace_id}>
+                  <SidebarMenuButton 
+                    asChild
+                    isActive={active}
+                    tooltip={wp.name}
+                    className="group/workplace group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:!justify-center"
+                  >
+                    <Link 
+                      to={wpUrl}
+                      onClick={() => setActiveWorkplace(wp)}
+                      className="flex items-center gap-3"
+                    >
+                      <div 
+                        className="flex size-6 shrink-0 items-center justify-center rounded-md border text-white shadow-sm transition-transform group-hover/workplace:scale-105"
+                        style={{ 
+                            backgroundColor: wp.color_hex, 
+                            borderColor: wp.color_hex 
+                        }}
+                      >
+                         <School className="size-3.5" />
+                      </div>
+                      
+                      <span className="truncate group-data-[collapsible=icon]:hidden">
+                        {wp.name}
+                      </span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        </SidebarGroup>
+      )}
+
+      <SidebarGroup className="mt-auto">
+        <SidebarGroupLabel>Konto</SidebarGroupLabel>
+        <SidebarMenu>
+          {accountNavItems.map((item) => {
+            const active = isLinkActive(item.url);
+            return (
+              <SidebarMenuItem key={item.url}>
+                <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
+                  <Link to={item.url}>
+                    <item.icon className="size-4" />
+                    <span>{item.title}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
+      </SidebarGroup>
+    </>
   );
 }

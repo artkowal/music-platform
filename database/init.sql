@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS Workplaces (
   teacher_id INT NOT NULL,
   name VARCHAR(255) NOT NULL,
   color_hex VARCHAR(7) DEFAULT '#FFFFFF',
+  payment_type ENUM('per_lesson', 'monthly', 'none') NOT NULL DEFAULT 'none',
+  payment_amount DECIMAL(10, 2) NULL,
+  sort_order INT DEFAULT 0,
   
   FOREIGN KEY (teacher_id) 
     REFERENCES Users(user_id)
@@ -33,6 +36,7 @@ CREATE TABLE IF NOT EXISTS Courses (
   description TEXT,
   course_type ENUM('individual', 'group') NOT NULL,
   invite_code VARCHAR(10) UNIQUE NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
   FOREIGN KEY (teacher_id) 
     REFERENCES Users(user_id)

@@ -4,10 +4,14 @@ const router = express.Router();
 const statusRoutes = require('./status');
 const authRoutes = require('./auth');
 const userRoutes = require('./user'); // register
+const workplaceRoutes = require('./workplaces');
+const courseRoutes = require('./courses');
 
 
 router.use('/status', statusRoutes);
 router.use('/auth', authRoutes);
 router.use('/user', userRoutes);
+router.use('/workplaces', workplaceRoutes);
+router.use('/courses', courseRoutes);
 
 module.exports = router;
