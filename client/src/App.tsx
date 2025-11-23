@@ -11,7 +11,7 @@ import RedirectIfAuth from "@/components/layouts/RedirectIfAuth";
 import MainLayout from "@/components/layouts/MainLayout";
 
 import DashboardLayout from "@/components/layouts/DashboardLayout";
-import DashboardOverviewPage from "@/pages/dashboard/DashboardOverviewPage";
+import DashboardOverviewPage from "@/pages/dashboard/dashboardOverviewPage/DashboardOverviewPage";
 import DashboardSettingsPage from "@/pages/dashboard/DashboardSettingsPage";
 import DashboardAboutPage from "@/pages/dashboard/DashboardAboutPage";
 
