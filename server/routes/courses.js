@@ -384,26 +384,61 @@ router.delete('/:id/students/:studentId', protect, async (req, res) => {
  *         description: Szczegóły kursu i lista uczniów
  */
 router.get('/:id/details', protect, async (req, res) => {
-  const [courseRows] = await dbPool.execute(
-    `SELECT * FROM Courses WHERE course_id = ? AND teacher_id = ?`,
-    [req.params.id, req.user.user_id]
-  );
+  const courseId = req.params.id;
+  const userId = req.user.user_id;
+  const userRole = req.user.role;
 
-  if (courseRows.length === 0) return res.status(404).json({ message: 'Kurs nie istnieje' });
+  let query = '';
+  let params = [];
 
-  const [studentRows] = await dbPool.execute(
-    `SELECT u.user_id, u.email, u.first_name, u.last_name 
+if (userRole === 'teacher') {
+    query = `
+      SELECT c.*, w.color_hex, w.name as workplace_name 
+      FROM Courses c 
+      LEFT JOIN Workplaces w ON c.workplace_id = w.workplace_id
+      WHERE c.course_id = ? AND c.teacher_id = ?
+    `;
+    params = [courseId, userId];
+  } else {
+    query = `
+      SELECT c.*, w.color_hex, w.name as workplace_name, u.first_name as teacher_name, u.last_name as teacher_lastname
+      FROM Courses c
+      JOIN Enrollments e ON c.course_id = e.course_id
+      JOIN Users u ON c.teacher_id = u.user_id
+      LEFT JOIN Workplaces w ON c.workplace_id = w.workplace_id
+      WHERE c.course_id = ? AND e.student_id = ?
+    `;
+    params = [courseId, userId];
+  }
+
+  try {
+    const [courseRows] = await dbPool.execute(query, params);
+
+    if (courseRows.length === 0) {
+      return res.status(404).json({ message: 'Kurs nie istnieje lub nie masz do niego dostępu.' });
+    }
+
+    let studentRows = [];
+    if (userRole === 'teacher') {
+      [studentRows] = await dbPool.execute(
+        `SELECT u.user_id, u.email, u.first_name, u.last_name 
          FROM Enrollments e 
          JOIN Users u ON e.student_id = u.user_id 
          WHERE e.course_id = ?`,
-    [req.params.id]
-  );
+        [courseId]
+      );
+    }
 
-  res.json({ 
-    success: true, 
-    course: courseRows[0], 
-    students: studentRows 
-  });
+    res.json({ 
+      success: true, 
+      course: courseRows[0], 
+      students: studentRows
+    });
+
+  } catch (error) {
+    console.error("Błąd pobierania szczegółów kursu:", error);
+    res.status(500).json({ message: 'Błąd serwera.' });
+  }
 });
 
 module.exports = router;

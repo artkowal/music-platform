@@ -71,7 +71,6 @@ export function NavbarUserMobile() {
           </div>
         </div>
 
-        {/* Przyciski Akcji */}
         <div className="grid gap-3">
           <Button 
             variant="outline" 

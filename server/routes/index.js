@@ -6,6 +6,7 @@ const authRoutes = require('./auth');
 const userRoutes = require('./user'); // register
 const workplaceRoutes = require('./workplaces');
 const courseRoutes = require('./courses');
+const lessonRoutes = require('./lessons');
 
 
 router.use('/status', statusRoutes);
@@ -13,5 +14,6 @@ router.use('/auth', authRoutes);
 router.use('/user', userRoutes);
 router.use('/workplaces', workplaceRoutes);
 router.use('/courses', courseRoutes);
+router.use('/lessons', lessonRoutes);
 
 module.exports = router;

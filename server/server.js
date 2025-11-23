@@ -6,6 +6,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
+const path = require('path');
 
 const swaggerOptions = require('./swaggerConfig');
 const mainRouter = require('./routes'); 
@@ -21,6 +22,9 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(cookieParser()); 
+
+// --- Pobieranie/wysyłanie plików ---
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));

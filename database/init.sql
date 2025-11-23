@@ -71,7 +71,9 @@ CREATE TABLE IF NOT EXISTS Lessons (
   description TEXT,
   scheduled_time DATETIME NULL,
   duration_minutes INT DEFAULT 45,
+  is_visible BOOLEAN DEFAULT TRUE,
   `status` ENUM('planned', 'completed', 'cancelled') DEFAULT 'planned',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   
   FOREIGN KEY (course_id) 
     REFERENCES Courses(course_id)
@@ -113,6 +115,7 @@ CREATE TABLE IF NOT EXISTS Lesson_Progress (
   lesson_id INT NOT NULL,
   is_completed BOOLEAN DEFAULT FALSE,
   time_spent_seconds INT DEFAULT 0,
+  completed_at DATETIME NULL,
   
   UNIQUE KEY (student_id, lesson_id),
 

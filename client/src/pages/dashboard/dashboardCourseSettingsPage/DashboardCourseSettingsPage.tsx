@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { coursesApi } from "@/api/courses";
+import { lessonsApi } from "@/api/lessons";
 import { useWorkplace } from "@/context/WorkplaceContext";
 import type { Student } from "@/types/Student";
 import type { CourseData } from "@/types/Course";
+import type { Lesson } from "@/types/Lesson";
 
 import { CourseSettingsHeader } from "./components/CourseSettingsHeader";
 import { CourseEditForm } from "./components/CourseEditForm";
 import { StudentManagement } from "./components/StudentManagement";
+import { LessonsManagement } from "./components/LessonsManagement";
 
 export default function DashboardCourseSettingsPage() {
     const { id } = useParams();
@@ -24,11 +27,17 @@ export default function DashboardCourseSettingsPage() {
     });
 
     const [students, setStudents] = useState<Student[]>([]);
+    const [lessons, setLessons] = useState<Lesson[]>([]);
 
     const fetchData = async () => {
         if (!id) return;
         try {
-            const { course, students } = await coursesApi.getDetails(id);
+            const [courseRes, lessonsRes] = await Promise.all([
+                coursesApi.getDetails(id),
+                lessonsApi.getByCourseId(id)
+            ]);
+            
+            const { course, students } = courseRes;
             
             setCourseData({
                 title: course.title,
@@ -38,6 +47,8 @@ export default function DashboardCourseSettingsPage() {
             });
             
             setStudents(students);
+            setLessons(lessonsRes);
+
         } catch (error) {
             console.error(error);
             navigate('/dashboard/courses'); 
@@ -91,25 +102,32 @@ export default function DashboardCourseSettingsPage() {
     if (loading) return <div className="p-8">Ładowanie ustawień...</div>;
 
     return (
-        <div className="flex flex-col min-h-[calc(100vh-4rem)] animate-in fade-in">
+        <div className="flex flex-col min-h-[calc(100vh-4rem)] animate-in fade-in pb-10">
             
             <CourseSettingsHeader 
                 title="Ustawienia kursu" 
                 subtitle={`Zarządzaj informacjami o kursie "${courseData.title}"`}
             />
 
-            <div className="p-6 grid gap-6 grid-cols-1 xl:grid-cols-2 items-start">
+            <div className="p-6 space-y-8">
                 
-                <CourseEditForm 
-                    initialData={courseData} 
-                    workplaces={workplaces} 
-                    onSave={handleSaveCourse} 
-                />
+                <div className="grid gap-8 grid-cols-1 xl:grid-cols-2 items-start">
+                    <CourseEditForm 
+                        initialData={courseData} 
+                        workplaces={workplaces} 
+                        onSave={handleSaveCourse} 
+                    />
 
-                <StudentManagement 
-                    students={students}
-                    onAddStudent={handleAddStudent}
-                    onRemoveStudent={handleRemoveStudent}
+                    <StudentManagement 
+                        students={students}
+                        onAddStudent={handleAddStudent}
+                        onRemoveStudent={handleRemoveStudent}
+                    />
+                </div>
+
+                <LessonsManagement 
+                    lessons={lessons} 
+                    onRefresh={fetchData} 
                 />
 
             </div>
