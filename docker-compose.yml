@@ -48,6 +48,7 @@ services:
     volumes:
       - ./server:/app
       - /app/node_modules
+      - ./server/uploads:/app/uploads
     environment:
       DATABASE_URL: "mysql://root:admin@db:3306/music-platform-db"
     depends_on:

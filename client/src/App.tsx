@@ -11,7 +11,7 @@ import RedirectIfAuth from "@/components/layouts/RedirectIfAuth";
 import MainLayout from "@/components/layouts/MainLayout";
 
 import DashboardLayout from "@/components/layouts/DashboardLayout";
-import DashboardOverviewPage from "@/pages/dashboard/DashboardOverviewPage";
+import DashboardOverviewPage from "@/pages/dashboard/dashboardOverviewPage/DashboardOverviewPage";
 import DashboardSettingsPage from "@/pages/dashboard/DashboardSettingsPage";
 import DashboardAboutPage from "@/pages/dashboard/DashboardAboutPage";
 
@@ -19,6 +19,8 @@ import DashboardWorkplacesSettingsPage from "./pages/dashboard/dashboardWorkplac
 import DashboardWorkplacePage from "./pages/dashboard/dashboardWorkplacePage/DashboardWorkplacePage";
 import DashboardAllCoursesPage from "@/pages/dashboard/dashboardAllCoursesPage/DashboardAllCoursesPage";
 import DashboardCourseSettingsPage from "./pages/dashboard/dashboardCourseSettingsPage/DashboardCourseSettingsPage";
+import DashboardCoursePage from "./pages/dashboard/dashboardCoursePage/DashboardCoursePage";
+import DashboardLessonPage from "./pages/dashboard/dashboardLessonPage/dashboardLessonPage";
 
 function App() {
   return (
@@ -46,7 +48,10 @@ function App() {
           <Route path="workplaces" element={<DashboardWorkplacesSettingsPage />} />
 
           <Route path="courses" element={<DashboardAllCoursesPage />} />
+          <Route path="courses/:id" element={<DashboardCoursePage />} />
           <Route path="courses/:id/settings" element={<DashboardCourseSettingsPage />} />
+
+          <Route path="courses/:courseId/lessons/:lessonId" element={<DashboardLessonPage />} />
 
           <Route path="settings" element={<DashboardSettingsPage />} />
           <Route path="about" element={<DashboardAboutPage />} />
