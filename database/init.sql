@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS Meetings (
   zoom_start_url VARCHAR(2048) NULL,
   zoom_report_json TEXT NULL,
   
-  status ENUM('planned', 'completed', 'cancelled', 'noshow') DEFAULT 'planned',
+  status ENUM('planned', 'pending', 'completed', 'cancelled', 'noshow') DEFAULT 'planned',
   cancelled_by ENUM('teacher', 'student') NULL,
   
   started_at DATETIME NULL,
@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS Meetings (
   
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   
-  FOREIGN KEY (course_id) REFERENCES Courses(course_id) ON DELETE CASCADE,
+  FOREIGN KEY (course_id) REFERENCES Courses(course_id) ON DELETE CASCADE
 );
 
 -- 7. Tabela Materiałów Dydaktycznych
@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS User_Tokens (
   FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
 );
 
--- 11. Widok statystyk (Zaktualizowany pod tabelę Meetings)
+-- 11. Widok statystyk
 CREATE OR REPLACE VIEW V_Teacher_Monthly_Stats AS
 SELECT
   c.teacher_id,
