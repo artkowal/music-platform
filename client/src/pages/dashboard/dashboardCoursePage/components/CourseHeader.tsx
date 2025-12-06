@@ -1,12 +1,15 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
   ArrowLeft, 
   Settings, 
-  GraduationCap 
+  GraduationCap,
+  CalendarDays 
 } from "lucide-react";
 import { CreateLessonDialog } from "@/components/dialogs/CreateLessonDialog";
+import { ScheduleLessonDialog } from "@/components/dialogs/SheduleLessonDialog";
 import type { Course } from "@/types/Course";
 import { hexToRgba } from "@/lib/colors";
 
@@ -20,6 +23,8 @@ interface CourseHeaderProps {
 export function CourseHeader({ course, isTeacher, onRefresh }: CourseHeaderProps) {
   const navigate = useNavigate();
   const accentColor = course.color_hex || "hsl(var(--primary))";
+  
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
 
   return (
     <div className="-mx-4 -mt-4 md:-mx-8 md:-mt-8 mb-8 border-b bg-background px-6 py-6">
@@ -77,9 +82,23 @@ export function CourseHeader({ course, isTeacher, onRefresh }: CourseHeaderProps
                 </div>
             </div>
 
-            {isTeacher && (
-                 <CreateLessonDialog courseId={course.course_id} onSuccess={onRefresh} />
-            )}
+            <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => setIsScheduleOpen(true)}>
+                    <CalendarDays className="mr-2 h-4 w-4" /> Umów lekcję online
+                </Button>
+
+                <ScheduleLessonDialog 
+                    courses={[course]} 
+                    defaultCourseId={course.course_id}
+                    onSuccess={onRefresh}
+                    isOpen={isScheduleOpen}
+                    onClose={() => setIsScheduleOpen(false)}
+                />
+
+                {isTeacher && (
+                    <CreateLessonDialog courseId={course.course_id} onSuccess={onRefresh} />
+                )}
+            </div>
         </div>
       </div>
     </div>

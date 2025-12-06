@@ -72,15 +72,43 @@ CREATE TABLE IF NOT EXISTS Lessons (
   scheduled_time DATETIME NULL,
   duration_minutes INT DEFAULT 45,
   is_visible BOOLEAN DEFAULT TRUE,
-  `status` ENUM('planned', 'completed', 'cancelled') DEFAULT 'planned',
+  status ENUM('planned', 'completed', 'cancelled') DEFAULT 'planned',
+  is_started_early BOOLEAN DEFAULT FALSE,
+  is_ended_early BOOLEAN DEFAULT FALSE,
+  cancelled_by VARCHAR(20) NULL,
+  
+  lesson_type ENUM('stationary', 'online') NOT NULL DEFAULT 'stationary',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   
-  FOREIGN KEY (course_id) 
-    REFERENCES Courses(course_id)
-    ON DELETE CASCADE
+  FOREIGN KEY (course_id) REFERENCES Courses(course_id) ON DELETE CASCADE
 );
 
--- 6. Tabela Materiałów Dydaktycznych
+-- 6. Tabela Potwierdzeń
+CREATE TABLE IF NOT EXISTS Lesson_Confirmations (
+  confirmation_id INT AUTO_INCREMENT PRIMARY KEY,
+  lesson_id INT NOT NULL,
+  user_id INT NOT NULL,
+  is_confirmed BOOLEAN DEFAULT FALSE,
+  confirmed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  
+  FOREIGN KEY (lesson_id) REFERENCES Lessons(lesson_id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+  UNIQUE KEY (lesson_id, user_id)
+);
+
+-- 7. Tabela Zoom 
+CREATE TABLE IF NOT EXISTS Zoom_Meetings (
+  zoom_id INT AUTO_INCREMENT PRIMARY KEY,
+  lesson_id INT NOT NULL,
+  meeting_id VARCHAR(50),
+  join_url VARCHAR(1024),
+  start_url VARCHAR(2048),
+  report_json TEXT,
+  
+  FOREIGN KEY (lesson_id) REFERENCES Lessons(lesson_id) ON DELETE CASCADE
+);
+
+-- 8. Tabela Materiałów Dydaktycznych
 CREATE TABLE IF NOT EXISTS Materials (
   material_id INT AUTO_INCREMENT PRIMARY KEY,
   lesson_id INT NOT NULL,
@@ -92,7 +120,7 @@ CREATE TABLE IF NOT EXISTS Materials (
     ON DELETE CASCADE
 );
 
--- 7. Tabela Komentarzy (pod lekcjami)
+-- 9. Tabela Komentarzy (pod lekcjami)
 CREATE TABLE IF NOT EXISTS Comments (
   comment_id INT AUTO_INCREMENT PRIMARY KEY,
   lesson_id INT NOT NULL,
@@ -111,7 +139,7 @@ CREATE TABLE IF NOT EXISTS Comments (
     ON DELETE CASCADE
 );
 
--- 8. Tabela Postępów Ucznia w Lekcji
+-- 10. Tabela Postępów Ucznia w Lekcji
 CREATE TABLE IF NOT EXISTS Lesson_Progress (
   progress_id INT AUTO_INCREMENT PRIMARY KEY,
   student_id INT NOT NULL,
@@ -130,7 +158,7 @@ CREATE TABLE IF NOT EXISTS Lesson_Progress (
     ON DELETE CASCADE
 );
 
--- 9. Widok (VIEW) do statystyk Nauczyciela
+-- 11. Widok do statystyk Nauczyciela
 CREATE OR REPLACE VIEW V_Teacher_Monthly_Stats AS
 SELECT
   c.teacher_id,
@@ -152,7 +180,7 @@ GROUP BY
   stat_year,
   stat_month;
 
-  -- 10. NOWA TABELA: Aktywne Tokeny (Sesje)
+  -- 11. Aktywne Tokeny (Sesje)
 CREATE TABLE IF NOT EXISTS User_Tokens (
   token_id VARCHAR(36) PRIMARY KEY, -- UUIDv4
   user_id INT NOT NULL,

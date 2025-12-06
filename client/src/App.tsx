@@ -21,6 +21,7 @@ import DashboardAllCoursesPage from "@/pages/dashboard/dashboardAllCoursesPage/D
 import DashboardCourseSettingsPage from "./pages/dashboard/dashboardCourseSettingsPage/DashboardCourseSettingsPage";
 import DashboardCoursePage from "./pages/dashboard/dashboardCoursePage/DashboardCoursePage";
 import DashboardLessonPage from "./pages/dashboard/dashboardLessonPage/dashboardLessonPage";
+import DashboardCalendarPage from "./pages/dashboard/dashboardCalendarPage/DashboardCalendarPage";
 
 function App() {
   return (
@@ -52,6 +53,8 @@ function App() {
           <Route path="courses/:id/settings" element={<DashboardCourseSettingsPage />} />
 
           <Route path="courses/:courseId/lessons/:lessonId" element={<DashboardLessonPage />} />
+
+          <Route path="calendar" element={<DashboardCalendarPage />} />
 
           <Route path="settings" element={<DashboardSettingsPage />} />
           <Route path="about" element={<DashboardAboutPage />} />
