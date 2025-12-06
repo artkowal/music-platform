@@ -22,6 +22,7 @@ import DashboardCourseSettingsPage from "./pages/dashboard/dashboardCourseSettin
 import DashboardCoursePage from "./pages/dashboard/dashboardCoursePage/DashboardCoursePage";
 import DashboardLessonPage from "./pages/dashboard/dashboardLessonPage/dashboardLessonPage";
 import DashboardCalendarPage from "./pages/dashboard/dashboardCalendarPage/DashboardCalendarPage";
+import DashboardFinancesPage from "./pages/dashboard/dashboardFinancesPage/dashboardFinancesPage";
 
 function App() {
   return (
@@ -55,6 +56,8 @@ function App() {
           <Route path="courses/:courseId/lessons/:lessonId" element={<DashboardLessonPage />} />
 
           <Route path="calendar" element={<DashboardCalendarPage />} />
+
+          <Route path="finances" element={<DashboardFinancesPage />} />
 
           <Route path="settings" element={<DashboardSettingsPage />} />
           <Route path="about" element={<DashboardAboutPage />} />

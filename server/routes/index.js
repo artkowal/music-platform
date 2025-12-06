@@ -10,6 +10,7 @@ const lessonRoutes = require('./lessons');
 const commentsRoutes = require('./comments');
 const meetingRoutes = require('./meetings');
 const dashboardRoutes = require('./dashboard');
+const financesRoutes = require('./finances');
 
 router.use('/status', statusRoutes);
 router.use('/auth', authRoutes);
@@ -20,5 +21,6 @@ router.use('/lessons', lessonRoutes);
 router.use('/comments', commentsRoutes);
 router.use('/meetings', meetingRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/finances', financesRoutes);
 
 module.exports = router;
