@@ -78,6 +78,7 @@ export default function DashboardCoursePage() {
             lessons={lessons} 
             courseId={id!} 
             accentColor={accentColor}
+            onRefresh={fetchData}
         />
       </div>
 

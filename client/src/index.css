@@ -106,3 +106,85 @@
     @apply bg-background text-foreground;
   }
 }
+
+
+
+/* --- REACT BIG CALENDAR - MODERN DARK THEME --- */
+
+.rbc-calendar {
+  @apply font-sans text-foreground bg-card border-none h-full;
+  min-height: 750px;
+}
+
+/* --- HEADER (Dni tygodnia) --- */
+.rbc-header {
+  @apply py-4 font-medium text-muted-foreground border-b border-border/50 text-xs uppercase tracking-wider;
+}
+.rbc-header + .rbc-header {
+  @apply border-l border-border/50;
+}
+
+/* --- WIDOK MIESIĄCA --- */
+.rbc-month-view {
+  @apply border border-border rounded-xl overflow-hidden bg-card;
+}
+.rbc-month-row + .rbc-month-row {
+  @apply border-t border-border/50;
+}
+.rbc-day-bg + .rbc-day-bg {
+  @apply border-l border-border/50;
+}
+
+/* Naprawa białych pól (Dni z innego miesiąca) */
+.rbc-off-range-bg {
+  @apply bg-muted/5 !important;
+}
+.rbc-off-range {
+  @apply text-muted-foreground/20 !important;
+}
+
+/* Dzień dzisiejszy */
+.rbc-today {
+  @apply bg-primary/5 !important;
+}
+
+/* --- WIDOK TYGODNIA / DNIA --- */
+.rbc-time-view {
+  @apply border border-border rounded-xl overflow-hidden bg-card mt-4;
+}
+.rbc-time-header-content {
+  @apply border-l border-border/50;
+}
+.rbc-time-content {
+  @apply border-t border-border/50;
+}
+.rbc-day-slot .rbc-time-slot {
+  @apply border-t border-border/30;
+}
+/* Grubsza linia co godzinę (major slots) */
+.rbc-timeslot-group {
+  @apply border-b border-border/60 !important; 
+}
+
+/* Etykiety godzin (lewa strona) */
+.rbc-time-gutter .rbc-timeslot-group {
+  @apply border-b border-border/50 text-xs text-muted-foreground flex items-center justify-end pr-3;
+}
+
+/* Wskaźnik aktualnego czasu */
+.rbc-current-time-indicator {
+  @apply bg-primary h-[2px];
+}
+
+/* --- EVENTS (Kafelki lekcji) --- */
+.rbc-event {
+  @apply rounded-md shadow-sm border border-primary/20 p-1 text-xs font-medium transition-all hover:opacity-90 hover:scale-[1.01];
+}
+.rbc-event-content {
+  @apply truncate leading-tight;
+}
+
+/* Ukrycie domyślnego paska narzędzi */
+.rbc-toolbar {
+  @apply hidden;
+}
