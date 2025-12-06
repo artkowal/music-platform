@@ -9,7 +9,7 @@ import {
   CalendarDays 
 } from "lucide-react";
 import { CreateLessonDialog } from "@/components/dialogs/CreateLessonDialog";
-import { ScheduleLessonDialog } from "@/components/dialogs/SheduleLessonDialog";
+import { ScheduleMeetingDialog } from "@/components/dialogs/SheduleMeetingDialog";
 import type { Course } from "@/types/Course";
 import { hexToRgba } from "@/lib/colors";
 
@@ -87,7 +87,7 @@ export function CourseHeader({ course, isTeacher, onRefresh }: CourseHeaderProps
                     <CalendarDays className="mr-2 h-4 w-4" /> Umów lekcję online
                 </Button>
 
-                <ScheduleLessonDialog 
+                <ScheduleMeetingDialog 
                     courses={[course]} 
                     defaultCourseId={course.course_id}
                     onSuccess={onRefresh}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { lessonsApi } from "@/api/lessons";
+import { lessonsApi } from "@/api/Lesson";
 import { coursesApi } from "@/api/courses";
 import { commentsApi } from "@/api/comments";
 import { useAuth } from "@/hooks/useAuth";
@@ -43,44 +43,47 @@ export default function DashboardLessonPage() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const fetchData = async () => {
-    if (!courseId || !lessonId) return;
-    try {
-        const courseRes = await coursesApi.getDetails(courseId);
-        setCourse(courseRes.course);
-        setStudents(courseRes.students);
-
-        const allLessons: Lesson[] = await lessonsApi.getByCourseId(courseId);
-        const found = allLessons.find((l) => l.lesson_id === Number(lessonId));
-        
-        if (!found) {
-            navigate(`/dashboard/courses/${courseId}`);
-            return;
-        }
-        setLesson(found);
-        setEditData({
-            title: found.title,
-            description: found.description || "",
-            duration: found.duration_minutes,
-            isVisible: Boolean(found.is_visible)
-        });
-
-        // NOWE: Pobierz liczbę nieprzeczytanych komentarzy
-        const count = await commentsApi.getUnreadCount(lessonId);
-        setUnreadCount(count);
-
-    } catch (error) {
-        console.error(error);
-        navigate(`/dashboard/courses/${courseId}`);
-    } finally {
-        setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const fetchData = async () => {
+        if (!courseId || !lessonId) return;
+        setLoading(true);
+        try {
+            const courseRes = await coursesApi.getDetails(courseId);
+            setCourse(courseRes.course);
+            setStudents(courseRes.students);
+    
+            const allLessons: Lesson[] = await lessonsApi.getByCourseId(courseId);
+            const found = allLessons.find((l) => l.lesson_id === Number(lessonId));
+            
+            if (!found) {
+                navigate(`/dashboard/courses/${courseId}`);
+                return;
+            }
+            setLesson(found);
+            setEditData({
+                title: found.title,
+                description: found.description || "",
+                duration: found.duration_minutes,
+                isVisible: Boolean(found.is_visible)
+            });
+
+            try {
+                const count = await commentsApi.getUnreadCount(lessonId);
+                setUnreadCount(count);
+            } catch (e) {
+                console.error("Błąd licznika komentarzy", e);
+            }
+
+        } catch (error) {
+            console.error(error);
+            navigate(`/dashboard/courses/${courseId}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     fetchData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseId, lessonId]);
+  }, [courseId, lessonId, navigate]); 
 
   const handleOpenChat = async () => {
     setIsChatOpen(true);
@@ -110,9 +113,7 @@ export default function DashboardLessonPage() {
             await lessonsApi.addMaterials(lesson.lesson_id, formData);
         }
 
-        await fetchData();
-        setIsEditing(false);
-        setNewFiles([]);
+        window.location.reload(); 
     } catch (error) {
         console.error(error);
         alert("Błąd zapisu zmian");
@@ -260,7 +261,6 @@ export default function DashboardLessonPage() {
                 </Card>
             </div>
         ) : (
-            // TRYB PODGLĄDU
             <div className="space-y-10">
                 {isTeacher && !lesson.is_visible && (
                     <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg flex items-center gap-2 text-sm">
@@ -298,7 +298,6 @@ export default function DashboardLessonPage() {
                     </div>
                 </div>
 
-                {/* Przycisk FAB */}
                 <div 
                     className={cn(
                         "fixed bottom-6 right-6 z-40 transition-all duration-300 transform",

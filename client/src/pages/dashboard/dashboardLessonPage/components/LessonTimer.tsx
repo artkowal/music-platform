@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, CheckCircle2, Clock } from "lucide-react";
-import { lessonsApi } from "@/api/lessons";
+import { lessonsApi } from "@/api/Lesson";
 import { cn } from "@/lib/utils";
 
 interface Props {

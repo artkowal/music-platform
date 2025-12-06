@@ -11,7 +11,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkplace } from "@/context/WorkplaceContext";
 import { coursesApi } from "@/api/courses";
-import { lessonsApi } from "@/api/lessons";
+import { lessonsApi } from "@/api/Lesson";
 import type { Lesson } from "@/types/Lesson";
 
 export function NavbarBreadcrumbs() {
@@ -62,10 +62,9 @@ export function NavbarBreadcrumbs() {
   const getCrumbs = () => {
     const crumbs: { label: string; to?: string }[] = [];
 
-    // 1. ROOT
+    // ROOT
     crumbs.push({ label: "Pulpit", to: "/dashboard" });
 
-    // --- SCENARIUSZ 1: Jesteśmy w Placówce ---
     if (path === "/dashboard/workplaces") {
       crumbs.push({ label: "Zarządzaj placówkami" });
     }
@@ -77,7 +76,6 @@ export function NavbarBreadcrumbs() {
       crumbs.push({ label: workplace ? workplace.name : "Placówka" });
     }
 
-    // --- SCENARIUSZ 2: Jesteśmy w Kursie (lub liście kursów) ---
     else if (path.startsWith("/dashboard/courses")) {
         
         if (path === "/dashboard/courses") {

@@ -5,12 +5,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "lucide-react";
 import { RecentActivity } from "./components/RecentActivity";
-import { UpcomingLessons } from "./components/UpcomingLessons";
+import { UpcomingMeetings } from "./components/UpcomingMeetings";
 import { StatsCards } from "./components/StatsCards";
 import { LessonsToComplete } from "./components/LessonsToComplete";
 import { dashboardApi } from "@/api/dashboard";
 import type { DashboardData } from "@/types/Dashboard";
-
 
 export default function DashboardOverviewPage() {
   const { setActiveWorkplace } = useWorkplace();
@@ -63,7 +62,7 @@ export default function DashboardOverviewPage() {
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
           
           <div className="col-span-1 flex flex-col gap-6">
-             {data && <UpcomingLessons lessons={data.upcomingLessons} isTeacher={isTeacher} />}
+             {data && <UpcomingMeetings meetings={data.upcomingMeetings} />}
           </div>
 
           <div className="col-span-1 flex flex-col gap-6">

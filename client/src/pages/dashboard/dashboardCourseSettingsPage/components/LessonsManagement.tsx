@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Trash2, Clock, FileText, Eye, EyeOff } from "lucide-react";
 import type { Lesson } from "@/types/Lesson";
-import { lessonsApi } from "@/api/lessons";
+import { lessonsApi } from "@/api/Lesson";
 
 interface LessonsManagementProps {
   lessons: Lesson[];
@@ -18,7 +18,6 @@ export function LessonsManagement({ lessons, onRefresh }: LessonsManagementProps
   const handleToggleVisibility = async (lesson: Lesson) => {
     setIsUpdating(lesson.lesson_id);
     try {
-      // jeśli 1 to 0, jeśli 0 to 1
       await lessonsApi.update(lesson.lesson_id, {
         is_visible: !lesson.is_visible
       });
@@ -45,9 +44,9 @@ export function LessonsManagement({ lessons, onRefresh }: LessonsManagementProps
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Zarządzanie Lekcjami</CardTitle>
+        <CardTitle>Zarządzanie Materiałami</CardTitle>
         <CardDescription>
-          Zarządzaj widocznością i usuwaniem lekcji w tym kursie.
+          Zarządzaj widocznością i usuwaniem materiałów dydaktycznych w tym kursie.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -66,7 +65,7 @@ export function LessonsManagement({ lessons, onRefresh }: LessonsManagementProps
               {lessons.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    Brak lekcji w tym kursie.
+                    Brak materiałów w tym kursie.
                   </TableCell>
                 </TableRow>
               ) : (

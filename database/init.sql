@@ -22,9 +22,7 @@ CREATE TABLE IF NOT EXISTS Workplaces (
   payment_amount DECIMAL(10, 2) NULL,
   sort_order INT DEFAULT 0,
   
-  FOREIGN KEY (teacher_id) 
-    REFERENCES Users(user_id)
-    ON DELETE CASCADE
+  FOREIGN KEY (teacher_id) REFERENCES Users(user_id) ON DELETE CASCADE
 );
 
 -- 3. Tabela Kursów
@@ -38,16 +36,11 @@ CREATE TABLE IF NOT EXISTS Courses (
   invite_code VARCHAR(10) UNIQUE NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-  FOREIGN KEY (teacher_id) 
-    REFERENCES Users(user_id)
-    ON DELETE CASCADE,
-  
-  FOREIGN KEY (workplace_id) 
-    REFERENCES Workplaces(workplace_id)
-    ON DELETE SET NULL
+  FOREIGN KEY (teacher_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+  FOREIGN KEY (workplace_id) REFERENCES Workplaces(workplace_id) ON DELETE SET NULL
 );
 
--- 4. Tabela Zapisów (łączenie Uczniów z Kursami)
+-- 4. Tabela Zapisów
 CREATE TABLE IF NOT EXISTS Enrollments (
   enrollment_id INT AUTO_INCREMENT PRIMARY KEY,
   student_id INT NOT NULL,
@@ -55,72 +48,64 @@ CREATE TABLE IF NOT EXISTS Enrollments (
   
   UNIQUE KEY (student_id, course_id),
   
-  FOREIGN KEY (student_id) 
-    REFERENCES Users(user_id)
-    ON DELETE CASCADE,
-  FOREIGN KEY (course_id) 
-    REFERENCES Courses(course_id)
-    ON DELETE CASCADE
+  FOREIGN KEY (student_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+  FOREIGN KEY (course_id) REFERENCES Courses(course_id) ON DELETE CASCADE
 );
 
--- 5. Tabela Lekcji
+-- 5. Tabela Lekcji (Materiały / Tematy)
 CREATE TABLE IF NOT EXISTS Lessons (
   lesson_id INT AUTO_INCREMENT PRIMARY KEY,
   course_id INT NOT NULL,
   title VARCHAR(255) NOT NULL,
   description TEXT,
-  scheduled_time DATETIME NULL,
   duration_minutes INT DEFAULT 45,
   is_visible BOOLEAN DEFAULT TRUE,
-  status ENUM('planned', 'completed', 'cancelled') DEFAULT 'planned',
-  is_started_early BOOLEAN DEFAULT FALSE,
-  is_ended_early BOOLEAN DEFAULT FALSE,
-  cancelled_by VARCHAR(20) NULL,
-  
-  lesson_type ENUM('stationary', 'online') NOT NULL DEFAULT 'stationary',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   
   FOREIGN KEY (course_id) REFERENCES Courses(course_id) ON DELETE CASCADE
 );
 
--- 6. Tabela Potwierdzeń
-CREATE TABLE IF NOT EXISTS Lesson_Confirmations (
-  confirmation_id INT AUTO_INCREMENT PRIMARY KEY,
-  lesson_id INT NOT NULL,
-  user_id INT NOT NULL,
-  is_confirmed BOOLEAN DEFAULT FALSE,
-  confirmed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+-- 6. Tabela Spotkań (Kalendarz)
+CREATE TABLE IF NOT EXISTS Meetings (
+  meeting_id INT AUTO_INCREMENT PRIMARY KEY,
+  course_id INT NOT NULL,
+
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+
+  scheduled_time DATETIME NOT NULL,
+  duration_minutes INT DEFAULT 45,
   
-  FOREIGN KEY (lesson_id) REFERENCES Lessons(lesson_id) ON DELETE CASCADE,
-  FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE,
-  UNIQUE KEY (lesson_id, user_id)
+  type ENUM('stationary', 'online') NOT NULL DEFAULT 'stationary',
+  zoom_meeting_id VARCHAR(50) NULL,
+  zoom_join_url VARCHAR(1024) NULL,
+  zoom_start_url VARCHAR(2048) NULL,
+  zoom_report_json TEXT NULL,
+  
+  status ENUM('planned', 'completed', 'cancelled', 'noshow') DEFAULT 'planned',
+  cancelled_by ENUM('teacher', 'student') NULL,
+  
+  started_at DATETIME NULL,
+  ended_at DATETIME NULL,
+  is_confirmed_by_teacher BOOLEAN DEFAULT FALSE,
+  is_confirmed_by_student BOOLEAN DEFAULT FALSE,
+  
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  
+  FOREIGN KEY (course_id) REFERENCES Courses(course_id) ON DELETE CASCADE,
 );
 
--- 7. Tabela Zoom 
-CREATE TABLE IF NOT EXISTS Zoom_Meetings (
-  zoom_id INT AUTO_INCREMENT PRIMARY KEY,
-  lesson_id INT NOT NULL,
-  meeting_id VARCHAR(50),
-  join_url VARCHAR(1024),
-  start_url VARCHAR(2048),
-  report_json TEXT,
-  
-  FOREIGN KEY (lesson_id) REFERENCES Lessons(lesson_id) ON DELETE CASCADE
-);
-
--- 8. Tabela Materiałów Dydaktycznych
+-- 7. Tabela Materiałów Dydaktycznych
 CREATE TABLE IF NOT EXISTS Materials (
   material_id INT AUTO_INCREMENT PRIMARY KEY,
   lesson_id INT NOT NULL,
   title VARCHAR(255) NOT NULL,
   file_path VARCHAR(1024) NOT NULL, 
   
-  FOREIGN KEY (lesson_id)
-    REFERENCES Lessons(lesson_id)
-    ON DELETE CASCADE
+  FOREIGN KEY (lesson_id) REFERENCES Lessons(lesson_id) ON DELETE CASCADE
 );
 
--- 9. Tabela Komentarzy (pod lekcjami)
+-- 8. Tabela Komentarzy
 CREATE TABLE IF NOT EXISTS Comments (
   comment_id INT AUTO_INCREMENT PRIMARY KEY,
   lesson_id INT NOT NULL,
@@ -131,15 +116,11 @@ CREATE TABLE IF NOT EXISTS Comments (
   is_deleted BOOLEAN DEFAULT FALSE,
   is_read BOOLEAN DEFAULT FALSE,
   
-  FOREIGN KEY (lesson_id)
-    REFERENCES Lessons(lesson_id)
-    ON DELETE CASCADE,
-  FOREIGN KEY (user_id)
-    REFERENCES Users(user_id)
-    ON DELETE CASCADE
+  FOREIGN KEY (lesson_id) REFERENCES Lessons(lesson_id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
 );
 
--- 10. Tabela Postępów Ucznia w Lekcji
+-- 9. Tabela Postępów Ucznia w Materiale
 CREATE TABLE IF NOT EXISTS Lesson_Progress (
   progress_id INT AUTO_INCREMENT PRIMARY KEY,
   student_id INT NOT NULL,
@@ -150,43 +131,36 @@ CREATE TABLE IF NOT EXISTS Lesson_Progress (
   
   UNIQUE KEY (student_id, lesson_id),
 
-  FOREIGN KEY (student_id)
-    REFERENCES Users(user_id)
-    ON DELETE CASCADE,
-  FOREIGN KEY (lesson_id)
-    REFERENCES Lessons(lesson_id)
-    ON DELETE CASCADE
+  FOREIGN KEY (student_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+  FOREIGN KEY (lesson_id) REFERENCES Lessons(lesson_id) ON DELETE CASCADE
 );
 
--- 11. Widok do statystyk Nauczyciela
+-- 10. Tabela Tokenów (Sesje)
+CREATE TABLE IF NOT EXISTS User_Tokens (
+  token_id VARCHAR(36) PRIMARY KEY,
+  user_id INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  
+  FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
+);
+
+-- 11. Widok statystyk (Zaktualizowany pod tabelę Meetings)
 CREATE OR REPLACE VIEW V_Teacher_Monthly_Stats AS
 SELECT
   c.teacher_id,
   w.workplace_id,
   w.name AS workplace_name,
-  YEAR(l.scheduled_time) AS stat_year,
-  MONTH(l.scheduled_time) AS stat_month,
-  COUNT(l.lesson_id) AS lesson_count
-FROM Lessons l
-JOIN Courses c ON l.course_id = c.course_id
-JOIN Workplaces w ON c.workplace_id = w.workplace_id
+  YEAR(m.scheduled_time) AS stat_year,
+  MONTH(m.scheduled_time) AS stat_month,
+  COUNT(m.meeting_id) AS lesson_count
+FROM Meetings m
+JOIN Courses c ON m.course_id = c.course_id
+LEFT JOIN Workplaces w ON c.workplace_id = w.workplace_id
 WHERE 
-  l.`status` = 'completed'
-  AND l.scheduled_time IS NOT NULL
+  m.`status` = 'completed'
 GROUP BY
   c.teacher_id,
   w.workplace_id,
   w.name,
   stat_year,
   stat_month;
-
-  -- 11. Aktywne Tokeny (Sesje)
-CREATE TABLE IF NOT EXISTS User_Tokens (
-  token_id VARCHAR(36) PRIMARY KEY, -- UUIDv4
-  user_id INT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  
-  FOREIGN KEY (user_id)
-    REFERENCES Users(user_id)
-    ON DELETE CASCADE
-);

@@ -4,15 +4,14 @@ import { MapPin, CalendarDays, ArrowRight, Video } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format, isToday, isTomorrow } from "date-fns";
 import { pl } from "date-fns/locale";
-import type { DashboardData } from "@/types/Dashboard";
+import type { Meeting } from "@/types/Meeting";
 import { Badge } from "@/components/ui/badge";
 
 interface Props {
-  lessons: DashboardData['upcomingLessons'];
-  isTeacher: boolean;
+  meetings: Meeting[];
 }
 
-export function UpcomingLessons({ lessons, isTeacher }: Props) {
+export function UpcomingMeetings({ meetings }: Props) {
   const navigate = useNavigate();
 
   const formatDateLabel = (dateString: string) => {
@@ -26,16 +25,16 @@ export function UpcomingLessons({ lessons, isTeacher }: Props) {
     <Card className="bg-primary/5 border-primary/20 shadow-sm h-full">
         <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xl">
-            <CalendarDays className="h-5 w-5 text-primary" /> Nadchodzące zajęcia
+            <CalendarDays className="h-5 w-5 text-primary" /> Nadchodzące spotkania
         </CardTitle>
         <CardDescription>
-            {lessons.length > 0 
-                ? `Masz ${lessons.length} zaplanowanych lekcji w najbliższym czasie.` 
-                : "Brak zaplanowanych lekcji na najbliższe dni."}
+            {meetings.length > 0 
+                ? `Masz ${meetings.length} zaplanowanych spotkań.` 
+                : "Brak zaplanowanych spotkań na najbliższe dni."}
         </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-            {lessons.length === 0 && (
+            {meetings.length === 0 && (
                 <div className="py-8 text-center text-muted-foreground text-sm">
                     Twój grafik jest pusty.
                     <br/>
@@ -45,17 +44,17 @@ export function UpcomingLessons({ lessons, isTeacher }: Props) {
                 </div>
             )}
 
-            {lessons.map((lesson) => {
-                const isOnline = lesson.lesson_type === 'online';
-                const date = new Date(lesson.scheduled_time);
+            {meetings.map((meeting) => {
+                const isOnline = meeting.type === 'online';
+                const date = new Date(meeting.scheduled_time);
                 const time = format(date, "HH:mm");
 
                 return (
-                <div key={lesson.lesson_id} className="flex items-center justify-between bg-background/80 backdrop-blur p-3 rounded-lg border shadow-sm transition-all hover:border-primary/40">
+                <div key={meeting.meeting_id} className="flex items-center justify-between bg-background/80 backdrop-blur p-3 rounded-lg border shadow-sm hover:border-primary/40">
                     <div className="flex items-center gap-4 overflow-hidden">
                         <div className="bg-background border p-2 rounded-md text-center min-w-[60px] shrink-0">
                             <span className="block text-[10px] text-muted-foreground uppercase font-bold">
-                                {formatDateLabel(lesson.scheduled_time)}
+                                {formatDateLabel(meeting.scheduled_time)}
                             </span>
                             <span className="block text-lg font-bold text-foreground leading-none mt-0.5">
                                 {time}
@@ -63,34 +62,20 @@ export function UpcomingLessons({ lessons, isTeacher }: Props) {
                         </div>
                         
                         <div className="min-w-0">
-                            <p className="font-semibold text-sm truncate flex items-center gap-2">
-                                {lesson.title}
-                            </p>
-                            <div className="text-xs text-muted-foreground truncate flex flex-col sm:flex-row sm:items-center sm:gap-2">
-                                <span className="font-medium text-primary">{lesson.course_title}</span>
-                                <span className="hidden sm:inline">•</span>
-                                <span>
-                                    {isTeacher 
-                                        ? (lesson.workplace_name || "Lekcja prywatna") 
-                                        : `${lesson.teacher_name} ${lesson.teacher_lastname}`
-                                    }
-                                </span>
+                            <p className="font-semibold text-sm truncate">{meeting.title}</p>
+                            <div className="text-xs text-muted-foreground truncate">
+                                {meeting.course_title}
                             </div>
                         </div>
                     </div>
 
                     <div className="shrink-0 ml-2">
                         {isOnline ? (
-                            <Button 
-                                size="sm" 
-                                variant="ghost" 
-                                className="h-8 px-3 text-xs border hover:bg-primary/10"
-                                onClick={() => navigate(`/dashboard/courses/${lesson.course_id}`)}
-                            >
-                                <Video className="h-3 w-3 mr-1.5 text-blue-500" /> Do kursu
-                            </Button>
+                            <Badge variant="secondary" className="text-blue-600 bg-blue-50">
+                                <Video className="h-3 w-3 mr-1" /> Online
+                            </Badge>
                         ) : (
-                            <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                            <Badge variant="outline" className="text-muted-foreground">
                                 <MapPin className="h-3 w-3 mr-1" /> Stacjonarnie
                             </Badge>
                         )}
@@ -99,7 +84,7 @@ export function UpcomingLessons({ lessons, isTeacher }: Props) {
                 );
             })}
 
-            {lessons.length > 0 && (
+            {meetings.length > 0 && (
                 <Button variant="ghost" className="w-full text-xs mt-2" onClick={() => navigate('/dashboard/calendar')}>
                     Zobacz pełny kalendarz <ArrowRight className="ml-1 h-3 w-3" />
                 </Button>
