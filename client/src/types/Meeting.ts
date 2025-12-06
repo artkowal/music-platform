@@ -16,6 +16,8 @@ export interface Meeting {
   is_confirmed_by_student: boolean | number;
   
   course_title?: string;
+  workplace_id?: number;
+  student_names?: string;
   teacher_name?: string;
   teacher_lastname?: string;
   workplace_name?: string;

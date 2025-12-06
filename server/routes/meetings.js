@@ -68,7 +68,13 @@ router.get('/calendar', protect, async (req, res) => {
 
   if (role === 'teacher') {
     query = `
-      SELECT m.*, c.title AS course_title, w.name AS workplace_name, w.color_hex AS workplace_color
+      SELECT m.*, c.title AS course_title, c.workplace_id, w.name AS workplace_name, w.color_hex AS workplace_color,
+      (
+        SELECT GROUP_CONCAT(CONCAT(u.first_name, ' ', u.last_name) SEPARATOR ', ')
+        FROM Enrollments e
+        JOIN Users u ON e.student_id = u.user_id
+        WHERE e.course_id = c.course_id
+      ) AS student_names
       FROM Meetings m
       JOIN Courses c ON m.course_id = c.course_id
       LEFT JOIN Workplaces w ON c.workplace_id = w.workplace_id
@@ -77,7 +83,7 @@ router.get('/calendar', protect, async (req, res) => {
     `;
   } else {
     query = `
-      SELECT m.*, c.title AS course_title, w.name AS workplace_name, w.color_hex AS workplace_color,
+      SELECT m.*, c.title AS course_title, c.workplace_id, w.name AS workplace_name, w.color_hex AS workplace_color,
              u.first_name AS teacher_name, u.last_name AS teacher_lastname
       FROM Meetings m
       JOIN Courses c ON m.course_id = c.course_id

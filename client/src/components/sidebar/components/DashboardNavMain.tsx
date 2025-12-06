@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { 
   Home, Settings, Info, Briefcase, GraduationCap, 
-  Users, CalendarDays, Plus, Settings2, School, type LucideIcon 
+  CalendarDays, Plus, Settings2, TrendingUp, School,  type LucideIcon 
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkplace } from "@/context/WorkplaceContext";
@@ -43,7 +43,6 @@ export function DashboardNavMain() {
     { title: "Przegląd", url: "/dashboard", icon: Home },
     { title: "Wszystkie Kursy", url: "/dashboard/courses", icon: Briefcase },
     { title: "Kalendarz", url: "/dashboard/calendar", icon: CalendarDays },
-    { title: "Wszyscy Uczniowie", url: "/dashboard/students", icon: Users },
   ] : [
     { title: "Przegląd", url: "/dashboard", icon: Home },
     { title: "Moje Kursy", url: "/dashboard/courses", icon: GraduationCap },
@@ -51,8 +50,9 @@ export function DashboardNavMain() {
   ];
 
   const accountNavItems: NavItem[] = [
+    ...(isTeacher ? [{ title: "Rozliczenia", url: "/dashboard/finances", icon: TrendingUp }] : []),
     { title: "Ustawienia", url: "/dashboard/settings", icon: Settings },
-    { title:"O Projekcie", url: "/dashboard/about", icon: Info },
+    { title: "O Projekcie", url: "/dashboard/about", icon: Info },
   ];
 
   return (
