@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { coursesApi } from "@/api/courses";
-import { lessonsApi } from "@/api/lessons";
+import { lessonsApi } from "@/api/Lesson";
+import { meetingsApi } from "@/api/meetings";
 import { useAuth } from "@/hooks/useAuth";
 import { hexToHsl } from "@/lib/colors";
 import type { Course } from "@/types/Course";
 import type { Lesson } from "@/types/Lesson";
+import type { Meeting } from "@/types/Meeting";
 
 import { CourseHeader } from "./components/CourseHeader";
 import { LessonList } from "./components/LessonList";
+import { MeetingList } from "./components/MeetingList";
 
 export default function DashboardCoursePage() {
   const { id } = useParams();
@@ -18,6 +21,7 @@ export default function DashboardCoursePage() {
 
   const [course, setCourse] = useState<Course | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
@@ -26,8 +30,13 @@ export default function DashboardCoursePage() {
       const { course: courseData } = await coursesApi.getDetails(id);
       setCourse(courseData);
 
-      const lessonsData = await lessonsApi.getByCourseId(id);
+      const [lessonsData, meetingsData] = await Promise.all([
+          lessonsApi.getByCourseId(id),
+          meetingsApi.getByCourseId(id)
+      ]);
+
       setLessons(lessonsData);
+      setMeetings(meetingsData);
     } catch (error) {
       console.error(error);
       navigate("/dashboard/courses");
@@ -43,12 +52,12 @@ export default function DashboardCoursePage() {
 
   const handleDeleteCourse = async () => {
     if (!id) return;
-    if (confirm("Czy na pewno chcesz usunąć ten kurs? Wszystkie lekcje i postępy uczniów zostaną utracone.")) {
+    if (confirm("Czy na pewno chcesz usunąć ten kurs?")) {
         try {
             await coursesApi.delete(Number(id));
             navigate("/dashboard/courses");
         } catch (error) {
-            console.error("Błąd usuwania kursu", error);
+            console.error(error);
             alert("Nie udało się usunąć kursu.");
         }
     }
@@ -73,15 +82,22 @@ export default function DashboardCoursePage() {
         onDelete={handleDeleteCourse}
       />
 
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-5xl mx-auto px-4 pb-20">
+        
+        <MeetingList 
+            meetings={meetings} 
+            isTeacher={isTeacher} 
+            onRefresh={fetchData} 
+        />
+
         <LessonList 
             lessons={lessons} 
             courseId={id!} 
             accentColor={accentColor}
             onRefresh={fetchData}
         />
+        
       </div>
-
     </div>
   );
 }

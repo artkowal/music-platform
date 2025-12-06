@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { coursesApi } from "@/api/courses";
-import { lessonsApi } from "@/api/lessons";
+import { lessonsApi } from "@/api/Lesson";
 import { useWorkplace } from "@/context/WorkplaceContext";
 import type { Student } from "@/types/Student";
 import type { CourseData } from "@/types/Course";

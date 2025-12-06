@@ -1,41 +1,35 @@
 import { useState, useEffect, useCallback } from "react";
-import { Calendar, dateFnsLocalizer, Views, type Event, type View, type SlotInfo } from "react-big-calendar";
+import { Calendar, dateFnsLocalizer, Views, type View, type SlotInfo } from "react-big-calendar";
 import { format, parse, startOfWeek, getDay } from "date-fns";
 import { pl } from "date-fns/locale";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 
-import { lessonsApi } from "@/api/lessons";
+import { meetingsApi } from "@/api/meetings";
 import { coursesApi } from "@/api/courses";
 import { Button } from "@/components/ui/button";
-import { ScheduleLessonDialog } from "@/components/dialogs/SheduleLessonDialog";
-import { LessonDetailsDialog } from "@/components/dialogs/LessonDetailsDialog";
+import { ScheduleMeetingDialog } from "@/components/dialogs/SheduleMeetingDialog";
+import { MeetingDetailsDialog } from "@/components/dialogs/MeetingDetailsDialog";
 import { useAuth } from "@/hooks/useAuth";
 import type { Course } from "@/types/Course";
-import type { Lesson } from "@/types/Lesson";
+import type { Meeting } from "@/types/Meeting";
 import { Loader2, Plus } from "lucide-react";
 import { CalendarToolbar } from "./components/CalendarToolbar";
 
-const locales = {
-  'pl': pl,
-};
+const locales = { 'pl': pl };
+const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });
 
-const localizer = dateFnsLocalizer({
-  format,
-  parse,
-  startOfWeek,
-  getDay,
-  locales,
-});
-
-interface LessonEvent extends Event {
-    resource: Lesson & { color?: string; teacherName?: string };
+interface CalendarEvent {
+    title: string;
+    start: Date;
+    end: Date;
+    resource: Meeting;
 }
 
 export default function DashboardCalendarPage() {
   const { user } = useAuth();
   const isTeacher = user?.role === 'teacher';
   
-  const [events, setEvents] = useState<LessonEvent[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -46,42 +40,31 @@ export default function DashboardCalendarPage() {
   const [selectedSlotDate, setSelectedSlotDate] = useState<Date | null>(null);
 
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<LessonEvent | null>(null);
+  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
 
-  const fetchCalendarData = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true); 
+  const fetchCalendarData = useCallback(async () => {
+    setLoading(true);
     try {
       const allCourses = await coursesApi.getAll();
       setCourses(allCourses);
 
-      let allLessons: LessonEvent[] = [];
-      for (const course of allCourses) {
-        const lessons = await lessonsApi.getByCourseId(course.course_id);
-        
-        const courseColor = course.color_hex || 'hsl(var(--primary))';
-        const teacherName = `${course.teacher_name || ''} ${course.teacher_lastname || ''}`.trim();
+      const meetingsData = await meetingsApi.getCalendar(
+          new Date(new Date().getFullYear(), 0, 1).toISOString(), // Od początku roku
+          new Date(new Date().getFullYear(), 11, 31).toISOString() // Do końca roku
+      ); 
 
-        const mapped: LessonEvent[] = lessons
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .filter((l: any) => l.scheduled_time)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .map((l: any) => ({
-                title: l.title,
-                start: new Date(l.scheduled_time!),
-                end: new Date(new Date(l.scheduled_time!).getTime() + l.duration_minutes * 60000),
-                resource: { 
-                    ...l, 
-                    color: courseColor,
-                    teacherName: teacherName
-                }
-            }));
-        allLessons = [...allLessons, ...mapped];
-      }
-      setEvents(allLessons);
+      const mappedEvents: CalendarEvent[] = meetingsData.map(m => ({
+          title: m.title,
+          start: new Date(m.scheduled_time),
+          end: new Date(new Date(m.scheduled_time).getTime() + m.duration_minutes * 60000),
+          resource: m
+      }));
+
+      setEvents(mappedEvents);
     } catch (error) {
       console.error(error);
     } finally {
-      if (!silent) setLoading(false);
+      setLoading(false);
     }
   }, []);
 
@@ -94,107 +77,59 @@ export default function DashboardCalendarPage() {
       setIsCreateOpen(true);
   }, []);
 
-  const handleSelectEvent = useCallback((event: LessonEvent) => {
-      setSelectedEvent(event);
+  const handleSelectEvent = useCallback((event: CalendarEvent) => {
+      setSelectedMeeting(event.resource);
       setIsDetailsOpen(true);
   }, []);
 
-  const handleManualSchedule = () => {
-      setSelectedSlotDate(null);
-      setIsCreateOpen(true);
-  };
+  const eventPropGetter = (event: CalendarEvent) => {
+    const meeting = event.resource;
+    const isPast = event.end < new Date();
+    const isCancelled = meeting.status === 'cancelled';
+    const isCompleted = meeting.status === 'completed';
 
-  const handleDeleteLesson = async (id: number) => {
-      try {
-          await lessonsApi.delete(id);
-          setIsDetailsOpen(false);
-          fetchCalendarData(true); 
-      } catch (error) {
-          console.error(error);
-          alert("Nie udało się usunąć lekcji.");
-      }
-  };
-
-  const onNavigate = useCallback((action: 'PREV' | 'NEXT' | 'TODAY') => {
-    const newDate = new Date(date);
-    if (action === 'TODAY') {
-        setDate(new Date());
-        return;
-    }
-    switch (view) {
-        case Views.MONTH:
-            newDate.setMonth(date.getMonth() + (action === 'NEXT' ? 1 : -1));
-            break;
-        case Views.WEEK:
-            newDate.setDate(date.getDate() + (action === 'NEXT' ? 7 : -7));
-            break;
-        case Views.DAY:
-            newDate.setDate(date.getDate() + (action === 'NEXT' ? 1 : -1));
-            break;
-    }
-    setDate(newDate);
-  }, [view, date]);
-
-  const eventPropGetter = (event: LessonEvent) => {
-    const isPast = new Date(event.end!) < new Date();
-    const isFinished = Boolean(event.resource.is_ended_early) || event.resource.status === 'completed';
-    const isCancelled = event.resource.status === 'cancelled';
-
-    const customColor = event.resource.color || '#2563eb';
-
-    let backgroundColor = customColor;
-    let opacity = 1;
-    let borderLeft = '4px solid rgba(0,0,0,0.1)';
-    let textDecoration = 'none';
+    const baseColor = meeting.workplace_color || '#2563eb';
+    
+    const style: React.CSSProperties = {
+        backgroundColor: baseColor,
+        color: '#fff',
+        borderLeft: '4px solid rgba(0,0,0,0.1)',
+        opacity: 1
+    };
 
     if (isCancelled) {
-        backgroundColor = '#ef4444';
-        opacity = 0.6;
-        textDecoration = 'line-through';
-        borderLeft = '4px solid transparent';
-    } else if (isFinished || isPast) {
-        // Odbyta lub miniona lekcja
-        backgroundColor = 'hsl(var(--muted))';
-        opacity = 0.6;
-        borderLeft = '4px solid transparent';
+        style.backgroundColor = '#ef4444';
+        style.textDecoration = 'line-through';
+        style.opacity = 0.6;
+    } else if (isCompleted || isPast) {
+        style.backgroundColor = '#94a3b8';
+        style.opacity = 0.8;
     }
 
-    return {
-      style: {
-        backgroundColor,
-        color: (isFinished || isPast || isCancelled) ? 'hsl(var(--muted-foreground))' : '#fff',
-        border: 'none',
-        borderRadius: '4px',
-        opacity,
-        fontSize: '0.75rem',
-        borderLeft,
-        textDecoration,
-        display: 'flex',
-        flexDirection: 'column' as const,
-        justifyContent: 'flex-start',
-        padding: '2px 4px',
-        lineHeight: '1.2'
-      }
-    };
+    return { style };
   };
 
   return (
     <div className="space-y-4 animate-in fade-in">
-      
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
             <h2 className="text-3xl font-bold tracking-tight">Kalendarz zajęć</h2>
-            <p className="text-muted-foreground">Zarządzaj grafikiem i lekcjami.</p>
+            <p className="text-muted-foreground">Zarządzaj grafikiem i spotkaniami.</p>
         </div>
-        <Button onClick={handleManualSchedule} className="shadow-lg shadow-primary/20">
-            <Plus className="mr-2 h-4 w-4" /> Umów nową lekcję
+        <Button onClick={() => { setSelectedSlotDate(null); setIsCreateOpen(true); }} className="shadow-lg shadow-primary/20">
+            <Plus className="mr-2 h-4 w-4" /> Umów nowe spotkanie
         </Button>
       </div>
 
       <CalendarToolbar 
         date={date} 
         view={view} 
-        onNavigate={onNavigate} 
+        onNavigate={(action) => {
+            const newDate = new Date(date);
+            if (action === 'TODAY') setDate(new Date());
+            else if (action === 'PREV') setDate(new Date(newDate.setDate(newDate.getDate() - 7))); // Uproszczone
+            else setDate(new Date(newDate.setDate(newDate.getDate() + 7)));
+        }} 
         onViewChange={(v) => setView(v as View)} 
       />
 
@@ -208,80 +143,38 @@ export default function DashboardCalendarPage() {
         <Calendar
             localizer={localizer}
             events={events}
-            
             date={date}
             view={view}
             onNavigate={setDate}
             onView={setView}
-
-            step={60}       
-            timeslots={1}    
-            min={new Date(0, 0, 0, 7, 0, 0)} 
+            step={60}
+            timeslots={1}
+            min={new Date(0, 0, 0, 7, 0, 0)}
             max={new Date(0, 0, 0, 22, 0, 0)}
-            
-            selectable={true} 
-            onSelectSlot={handleSelectSlot} 
+            selectable={true}
+            onSelectSlot={handleSelectSlot}
             onSelectEvent={handleSelectEvent}
-            
             eventPropGetter={eventPropGetter}
-            toolbar={false} 
-
+            toolbar={false}
             culture="pl"
-            
-            // KOMPONENTY NIESTANDARDOWE
-            components={{
-                event: ({ event }) => (
-                    <div className="h-full flex flex-col overflow-hidden">
-                        {/* Tytuł pod godziną, mały i ucięty */}
-                        <span className="text-[10px] font-semibold truncate">{event.title}</span>
-                        {/* Opcjonalnie: Nazwa nauczyciela/ucznia */}
-                        {/* <span className="text-[9px] opacity-80 truncate">{event.resource.teacherName}</span> */}
-                    </div>
-                )
-            }}
-
-            formats={{
-                timeGutterFormat: (date, culture, localizer) => 
-                    localizer?.format(date, 'HH:mm', culture) || '',
-                eventTimeRangeFormat: ({ start, end }, culture, localizer) =>
-                    `${localizer?.format(start, 'HH:mm', culture)} - ${localizer?.format(end, 'HH:mm', culture)}`,
-                dayHeaderFormat: (date, culture, localizer) =>
-                    localizer?.format(date, 'EEEE, d MMMM', culture) || ''
-            }}
-            
-            messages={{
-                next: "Dalej",
-                previous: "Wstecz",
-                today: "Dziś",
-                month: "Miesiąc",
-                week: "Tydzień",
-                day: "Dzień",
-                agenda: "Agenda",
-                date: "Data",
-                time: "Godzina",
-                event: "Lekcja",
-                noEventsInRange: "Brak zaplanowanych lekcji w tym okresie.",
-                showMore: total => `+ ${total} więcej`
-            }}
+            messages={{ next: "Dalej", previous: "Wstecz", today: "Dziś", month: "Miesiąc", week: "Tydzień", day: "Dzień" }}
         />
       </div>
 
-      <ScheduleLessonDialog 
+      <ScheduleMeetingDialog 
         courses={courses} 
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-        onSuccess={() => fetchCalendarData(true)}
+        onSuccess={fetchCalendarData}
         initialDate={selectedSlotDate}
       />
 
-      <LessonDetailsDialog 
+      <MeetingDetailsDialog 
         isOpen={isDetailsOpen}
         onClose={() => setIsDetailsOpen(false)}
-        lesson={selectedEvent?.resource || null}
+        meeting={selectedMeeting}
         isTeacher={isTeacher}
-        onDelete={handleDeleteLesson}
-        accentColor={selectedEvent?.resource.color || "hsl(var(--primary))"}
-        teacherName={selectedEvent?.resource.teacherName}
+        onRefresh={fetchCalendarData}
       />
     </div>
   );
