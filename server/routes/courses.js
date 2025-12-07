@@ -441,4 +441,98 @@ if (userRole === 'teacher') {
   }
 });
 
+/**
+ * @swagger
+ * /api/courses/join:
+ *   post:
+ *     summary: Uczeń dołącza do kursu za pomocą kodu
+ *     tags: [Courses]
+ *     security:
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - code
+ *             properties:
+ *               code:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Dołączono pomyślnie
+ *       400:
+ *         description: Już jesteś w tym kursie lub brak kodu
+ *       404:
+ *         description: Nieprawidłowy kod
+ */
+router.post('/join', protect, async (req, res) => {
+  if (req.user.role !== 'student') {
+    return res.status(403).json({ message: 'Tylko uczniowie mogą dołączać do kursów.' });
+  }
+
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ message: 'Kod jest wymagany.' });
+
+  const [courses] = await dbPool.execute(
+    'SELECT course_id FROM Courses WHERE invite_code = ?',
+    [code.toUpperCase()]
+  );
+
+  if (courses.length === 0) {
+    return res.status(404).json({ message: 'Nieprawidłowy kod zaproszenia.' });
+  }
+
+  const courseId = courses[0].course_id;
+
+  try {
+    await dbPool.execute(
+      'INSERT INTO Enrollments (student_id, course_id) VALUES (?, ?)',
+      [req.user.user_id, courseId]
+    );
+    res.json({ success: true, message: 'Dołączono do kursu.' });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ message: 'Już jesteś zapisany na ten kurs.' });
+    }
+    console.error(error);
+    res.status(500).json({ message: 'Błąd serwera.' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/courses/{id}/leave:
+ *   delete:
+ *     summary: Uczeń opuszcza kurs
+ *     tags: [Courses]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Opuszczono kurs
+ *       403:
+ *         description: Brak uprawnień
+ */
+router.delete('/:id/leave', protect, async (req, res) => {
+  if (req.user.role !== 'student') {
+    return res.status(403).json({ message: 'Brak uprawnień.' });
+  }
+
+  await dbPool.execute(
+    'DELETE FROM Enrollments WHERE course_id = ? AND student_id = ?',
+    [req.params.id, req.user.user_id]
+  );
+
+  res.json({ success: true, message: 'Opuszczono kurs.' });
+});
+
 module.exports = router;

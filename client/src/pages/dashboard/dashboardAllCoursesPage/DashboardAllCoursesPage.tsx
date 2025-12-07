@@ -55,7 +55,7 @@ export default function DashboardAllCoursesPage() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <AllCoursesHeader count={courses.length} isTeacher={user?.role === 'teacher'} />
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {courses.map((course) => (
           <CourseCard 
             key={course.course_id} 
