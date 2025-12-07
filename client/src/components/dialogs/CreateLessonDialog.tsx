@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { lessonsApi } from "@/api/Lesson";
-import { Plus, Upload, X } from "lucide-react";
+import { Plus, Upload, X, Eye, EyeOff } from "lucide-react";
 
 interface Props {
   courseId: number;
@@ -22,6 +23,7 @@ export function CreateLessonDialog({ courseId, children, onSuccess }: Props) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [duration, setDuration] = useState("45");
+  const [isVisible, setIsVisible] = useState(true); // <--- Nowy stan
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -45,6 +47,7 @@ export function CreateLessonDialog({ courseId, children, onSuccess }: Props) {
       formData.append("title", title);
       formData.append("description", description);
       formData.append("duration_minutes", duration);
+      formData.append("is_visible", String(isVisible));
 
       selectedFiles.forEach((file) => {
         formData.append("files", file);
@@ -55,6 +58,7 @@ export function CreateLessonDialog({ courseId, children, onSuccess }: Props) {
       setTitle("");
       setDescription("");
       setDuration("45");
+      setIsVisible(true);
       setSelectedFiles([]);
       setOpen(false);
       
@@ -72,21 +76,22 @@ export function CreateLessonDialog({ courseId, children, onSuccess }: Props) {
       <DialogTrigger asChild>
         {children || (
           <Button>
-            <Plus className="mr-2 h-4 w-4" /> Dodaj lekcję
+            <Plus className="mr-2 h-4 w-4" /> Dodaj materiały
           </Button>
         )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[550px]">
         <DialogHeader>
-          <DialogTitle>Nowa lekcja</DialogTitle>
+          <DialogTitle>Nowy materiał / lekcja</DialogTitle>
           <DialogDescription>
-            Dodaj materiały i opis dla swoich uczniów.
+            Dodaj pliki i opis dla swoich uczniów.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-4">
+        <div className="grid gap-5 py-4">
+          
           <div className="grid gap-2">
-            <Label htmlFor="title">Temat lekcji</Label>
+            <Label htmlFor="title">Temat</Label>
             <Input
               id="title"
               placeholder="np. Wstęp do akordów"
@@ -99,24 +104,42 @@ export function CreateLessonDialog({ courseId, children, onSuccess }: Props) {
             <Label htmlFor="desc">Opis / Zadania</Label>
             <Textarea
               id="desc"
+              className="min-h-[100px]"
               placeholder="Opisz co będzie na lekcji lub co jest zadane..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="duration">Szacowany czas (minuty)</Label>
-            <Input
-              id="duration"
-              type="number"
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-            />
+          <div className="grid grid-cols-2 gap-4">
+             <div className="grid gap-2">
+                <Label htmlFor="duration">Czas (min)</Label>
+                <Input
+                  id="duration"
+                  type="number"
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                />
+             </div>
+             
+             {/* Sekcja widoczności - Switch */}
+             <div className="flex flex-col justify-end">
+                <div className="flex items-center justify-between border rounded-md p-2 px-3 bg-muted/30 h-10">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        {isVisible ? <Eye className="h-4 w-4 text-green-600"/> : <EyeOff className="h-4 w-4"/>}
+                        <span>{isVisible ? "Widoczna" : "Ukryta (Szkic)"}</span>
+                    </div>
+                    <Switch 
+                        checked={isVisible} 
+                        onCheckedChange={setIsVisible} 
+                        className="scale-75 origin-right"
+                    />
+                </div>
+             </div>
           </div>
 
           <div className="grid gap-2">
-            <Label>Materiały (PDF, Audio)</Label>
+            <Label>Materiały (PDF, Audio, Obrazy)</Label>
             <div className="flex items-center gap-2">
                 <Input
                     id="file-upload"
@@ -126,18 +149,18 @@ export function CreateLessonDialog({ courseId, children, onSuccess }: Props) {
                     onChange={handleFileChange}
                     accept=".pdf,.mp3,.wav,.jpg,.png,.doc,.docx"
                 />
-                <Button type="button" variant="secondary" onClick={() => document.getElementById('file-upload')?.click()} className="w-full">
-                    <Upload className="mr-2 h-4 w-4" /> Wybierz pliki
+                <Button type="button" variant="secondary" onClick={() => document.getElementById('file-upload')?.click()} className="w-full border-dashed border-2 bg-muted/20 hover:bg-muted/40">
+                    <Upload className="mr-2 h-4 w-4" /> Wybierz pliki z dysku
                 </Button>
             </div>
             
             {selectedFiles.length > 0 && (
-                <div className="space-y-2 mt-2 max-h-[100px] overflow-y-auto p-2 border rounded bg-muted/30">
+                <div className="space-y-2 mt-2 max-h-[120px] overflow-y-auto pr-1">
                     {selectedFiles.map((file, idx) => (
-                        <div key={idx} className="flex items-center justify-between text-sm bg-background p-2 rounded border">
-                            <span className="truncate max-w-[80%]">{file.name}</span>
-                            <button onClick={() => removeFile(idx)} className="text-destructive hover:bg-destructive/10 p-1 rounded">
-                                <X className="h-3 w-3" />
+                        <div key={idx} className="flex items-center justify-between text-xs bg-muted/40 p-2 rounded border border-border">
+                            <span className="truncate max-w-[85%]">{file.name}</span>
+                            <button onClick={() => removeFile(idx)} className="text-muted-foreground hover:text-destructive p-1 transition-colors">
+                                <X className="h-3.5 w-3.5" />
                             </button>
                         </div>
                     ))}
@@ -148,7 +171,7 @@ export function CreateLessonDialog({ courseId, children, onSuccess }: Props) {
 
         <DialogFooter>
           <Button onClick={handleSubmit} disabled={isSubmitting || !title}>
-            {isSubmitting ? "Zapisywanie..." : "Utwórz lekcję"}
+            {isSubmitting ? "Zapisywanie..." : "Utwórz"}
           </Button>
         </DialogFooter>
       </DialogContent>

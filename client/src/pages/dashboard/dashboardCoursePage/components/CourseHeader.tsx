@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,11 +5,9 @@ import {
   ArrowLeft, 
   Settings, 
   GraduationCap,
-  CalendarDays,
   LogOut 
 } from "lucide-react";
 import { CreateLessonDialog } from "@/components/dialogs/CreateLessonDialog";
-import { ScheduleMeetingDialog } from "@/components/dialogs/SheduleMeetingDialog";
 import type { Course } from "@/types/Course";
 import { hexToRgba } from "@/lib/colors";
 import { coursesApi } from "@/api/courses";
@@ -19,14 +16,11 @@ interface CourseHeaderProps {
   course: Course;
   isTeacher: boolean;
   onRefresh: () => void;
-  onDelete: () => void;
 }
 
 export function CourseHeader({ course, isTeacher, onRefresh }: CourseHeaderProps) {
   const navigate = useNavigate();
   const accentColor = course.color_hex || "hsl(var(--primary))";
-  
-  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
 
   const handleLeaveCourse = async () => {
     if (!confirm(`Czy na pewno chcesz opuścić kurs "${course.title}"?`)) return;
@@ -43,7 +37,7 @@ export function CourseHeader({ course, isTeacher, onRefresh }: CourseHeaderProps
     <div className="-mx-4 -mt-4 md:-mx-8 md:-mt-8 mb-8 border-b bg-background px-6 py-6">
       <div className="flex flex-col gap-6">
         
-        <div className="flex items-center justify-between">
+        <div>
             <Button 
                 variant="ghost" 
                 size="sm" 
@@ -52,30 +46,10 @@ export function CourseHeader({ course, isTeacher, onRefresh }: CourseHeaderProps
             >
                 <ArrowLeft className="mr-2 h-4 w-4" /> Wróć do listy
             </Button>
-
-            {isTeacher ? (
-                <div className="flex items-center gap-2">
-                    <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => navigate(`/dashboard/courses/${course.course_id}/settings`)}
-                    >
-                        <Settings className="mr-2 h-4 w-4" /> Ustawienia
-                    </Button>
-                </div>
-            ) : (
-                <Button 
-                    variant="ghost" 
-                    size="sm"
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={handleLeaveCourse}
-                >
-                    <LogOut className="mr-2 h-4 w-4" /> Opuść kurs
-                </Button>
-            )}
         </div>
 
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+            
             <div className="flex items-center gap-4">
                 <div 
                     className="flex h-14 w-14 items-center justify-center rounded-xl border shadow-sm shrink-0"
@@ -98,27 +72,35 @@ export function CourseHeader({ course, isTeacher, onRefresh }: CourseHeaderProps
                             {course.course_type === 'individual' ? 'Indywidualny' : 'Grupowy'}
                         </Badge>
                     </div>
-                    <p className="text-muted-foreground max-w-2xl">
+                    <p className="text-muted-foreground max-w-2xl line-clamp-1">
                         {course.description || "Brak opisu kursu."}
                     </p>
                 </div>
             </div>
 
-            <div className="flex items-center gap-2">
-                <Button variant="outline" onClick={() => setIsScheduleOpen(true)}>
-                    <CalendarDays className="mr-2 h-4 w-4" /> Umów lekcję online
-                </Button>
+            <div className="flex items-center gap-2 mt-2 md:mt-0">
+                {isTeacher ? (
+                    <>
+                        <CreateLessonDialog courseId={course.course_id} onSuccess={onRefresh} />
 
-                <ScheduleMeetingDialog 
-                    courses={[course]} 
-                    defaultCourseId={course.course_id}
-                    onSuccess={onRefresh}
-                    isOpen={isScheduleOpen}
-                    onClose={() => setIsScheduleOpen(false)}
-                />
-
-                {isTeacher && (
-                    <CreateLessonDialog courseId={course.course_id} onSuccess={onRefresh} />
+                        <Button 
+                            variant="outline" 
+                            size="icon"
+                            onClick={() => navigate(`/dashboard/courses/${course.course_id}/settings`)}
+                            title="Ustawienia kursu"
+                        >
+                            <Settings className="h-4 w-4" />
+                        </Button>
+                    </>
+                ) : (
+                    <Button 
+                        variant="ghost" 
+                        size="sm"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10 border border-transparent hover:border-destructive/20"
+                        onClick={handleLeaveCourse}
+                    >
+                        <LogOut className="mr-2 h-4 w-4" /> Opuść kurs
+                    </Button>
                 )}
             </div>
         </div>
