@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, TrendingUp, Calendar, CheckCircle2, XCircle, Clock, Wallet, CalendarDays } from "lucide-react";
-import { WorkplaceDetailsDialog } from "./components/WorkplaceDetailsDialog";
+import { WorkplaceDetailsDialog } from "../../../components/dialogs/WorkplaceDetailsDialog";
 
 const MONTHS = [
   "Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
