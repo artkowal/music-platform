@@ -6,11 +6,14 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar";
 import { WorkplaceProvider } from "@/context/WorkplaceContext";
+import { UnconfirmedLessonBlocker } from "../UnconfirmedLessonBlocker";
 
 export default function DashboardLayout() {
   return (
     <WorkplaceProvider>
     <SidebarProvider>
+
+      <UnconfirmedLessonBlocker />
 
       <AppSidebar />
 

@@ -1,6 +1,8 @@
 import { Routes, Route } from "react-router-dom";
 import { GlobalToastHandler } from "./components/GlobalToastHandler";
 import { Toaster } from "./components/ui/toaster";
+import { SocketProvider } from "./context/SocketContext";
+import { NotificationProvider } from "./context/NotificationContext";
 
 import HomePage from "@/pages/homePage/HomePage";
 import LoginPage from "@/pages/loginPage/LoginPage";
@@ -27,43 +29,41 @@ import DashboardFinancesPage from "./pages/dashboard/dashboardFinancesPage/dashb
 function App() {
   return (
     <>
-    <GlobalToastHandler />
+      <GlobalToastHandler />
       <Toaster />
-    <Routes>
-      {/* Niezalogowani uzytkownicy*/}
-      <Route element={<RedirectIfAuth />}>
-        <Route element={<MainLayout />}>
-          <Route path="/" element={<HomePage />} />
-        </Route>
+      
+      <SocketProvider>
+         <NotificationProvider>
+            <Routes>
+              {/* Niezalogowani uzytkownicy*/}
+              <Route element={<RedirectIfAuth />}>
+                <Route element={<MainLayout />}>
+                  <Route path="/" element={<HomePage />} />
+                </Route>
 
-        {/* Trasy publiczne BEZ Navbara */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-      </Route>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/register" element={<RegisterPage />} />
+              </Route>
 
-      {/* Zalogowani uzytkownicy */}
-      <Route element={<ProtectedRoute />}>
-        <Route path="/dashboard" element={<DashboardLayout />}>
-          <Route index element={<DashboardOverviewPage />} />
-
-          <Route path="workplace/:id" element={<DashboardWorkplacePage />} />
-          <Route path="workplaces" element={<DashboardWorkplacesSettingsPage />} />
-
-          <Route path="courses" element={<DashboardAllCoursesPage />} />
-          <Route path="courses/:id" element={<DashboardCoursePage />} />
-          <Route path="courses/:id/settings" element={<DashboardCourseSettingsPage />} />
-
-          <Route path="courses/:courseId/lessons/:lessonId" element={<DashboardLessonPage />} />
-
-          <Route path="calendar" element={<DashboardCalendarPage />} />
-
-          <Route path="finances" element={<DashboardFinancesPage />} />
-
-          <Route path="settings" element={<DashboardSettingsPage />} />
-          <Route path="about" element={<DashboardAboutPage />} />
-        </Route>
-      </Route>
-    </Routes>
+              {/* Zalogowani uzytkownicy */}
+              <Route element={<ProtectedRoute />}>
+                <Route path="/dashboard" element={<DashboardLayout />}>
+                  <Route index element={<DashboardOverviewPage />} />
+                  <Route path="workplace/:id" element={<DashboardWorkplacePage />} />
+                  <Route path="workplaces" element={<DashboardWorkplacesSettingsPage />} />
+                  <Route path="courses" element={<DashboardAllCoursesPage />} />
+                  <Route path="courses/:id" element={<DashboardCoursePage />} />
+                  <Route path="courses/:id/settings" element={<DashboardCourseSettingsPage />} />
+                  <Route path="courses/:courseId/lessons/:lessonId" element={<DashboardLessonPage />} />
+                  <Route path="calendar" element={<DashboardCalendarPage />} />
+                  <Route path="settings" element={<DashboardSettingsPage />} />
+                  <Route path="about" element={<DashboardAboutPage />} />
+                  <Route path="finances" element={<DashboardFinancesPage />} />
+                </Route>
+              </Route>
+            </Routes>
+         </NotificationProvider>
+      </SocketProvider>
     </>
   );
 }

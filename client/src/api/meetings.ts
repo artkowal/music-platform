@@ -21,6 +21,15 @@ interface ReportResponse {
   };
 }
 
+export interface UnconfirmedMeeting {
+  meeting_id: number;
+  title: string;
+  scheduled_time: string;
+  duration_minutes: number;
+  teacher_name: string;
+  teacher_lastname: string;
+}
+
 export const meetingsApi = {
   schedule: async (data: ScheduleMeetingPayload) => {
     return await api.post('/meetings/schedule', data);
@@ -52,7 +61,13 @@ export const meetingsApi = {
   confirm: async (meetingId: number) => {
     return await api.patch(`/meetings/${meetingId}/confirm`);
   },
-  
+  getUnconfirmed: async () => {
+    const response = await api.get<{ meeting: UnconfirmedMeeting | null }>('/meetings/unconfirmed');
+    return response.data;
+  },
+  dispute: async (meetingId: number) => {
+    return await api.post(`/meetings/${meetingId}/dispute`);
+  },
   getReport: async (meetingId: number) => {
     const response = await api.get<ReportResponse>(`/meetings/${meetingId}/report`);
     return response.data;

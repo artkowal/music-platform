@@ -5,7 +5,7 @@ import type { Comment } from "@/types/Comment";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { MessageSquare, Send, MoreVertical, Pencil, Trash2, X} from "lucide-react";
+import { MessageSquare, Send, MoreVertical, Pencil, Trash2, X, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
+import { useSocket } from "@/context/SocketContext";
 
 interface LessonCommentsProps {
   lessonId: number;
@@ -24,11 +25,13 @@ interface LessonCommentsProps {
 
 export function LessonComments({ lessonId, accentColor, onClose }: LessonCommentsProps) {
   const { user } = useAuth();
+  const { socket } = useSocket(); 
+  
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -40,27 +43,48 @@ export function LessonComments({ lessonId, accentColor, onClose }: LessonComment
     try {
       const data = await commentsApi.getByLessonId(lessonId);
       setComments(data);
+      setTimeout(scrollToBottom, 100);
     } catch (error) {
       console.error("Błąd pobierania komentarzy", error);
     }
   }, [lessonId]);
 
   useEffect(() => {
-    fetchComments().then(() => scrollToBottom());
+    fetchComments();
   }, [fetchComments]);
 
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewComment = (comment: Comment) => {
+        setComments((prev) => [...prev, comment]);
+        setTimeout(scrollToBottom, 100);
+    };
+
+    socket.on("receive_comment", handleNewComment);
+
+    return () => {
+        socket.off("receive_comment", handleNewComment);
+    };
+  }, [socket]);
+
+
   const handleAddComment = async () => {
-    if (!newComment.trim()) return;
-    setIsLoading(true);
+    if (!newComment.trim() || !socket) return;
+    
+    setIsSending(true);
+
     try {
-      await commentsApi.create(lessonId, newComment);
-      setNewComment("");
-      await fetchComments();
-      scrollToBottom();
+        socket.emit("send_comment", {
+            lessonId,
+            content: newComment
+        });
+        
+        setNewComment("");
     } catch (error) {
-      console.error(error);
+        console.error(error);
     } finally {
-      setIsLoading(false);
+        setIsSending(false);
     }
   };
 
@@ -75,7 +99,7 @@ export function LessonComments({ lessonId, accentColor, onClose }: LessonComment
     if (!confirm("Czy na pewno chcesz usunąć tę wiadomość?")) return;
     try {
       await commentsApi.delete(id);
-      fetchComments();
+      setComments(prev => prev.map(c => c.comment_id === id ? {...c, is_deleted: true} : c));
     } catch (error) {
       console.error(error);
     }
@@ -90,8 +114,8 @@ export function LessonComments({ lessonId, accentColor, onClose }: LessonComment
     if (!editingId || !editContent.trim()) return;
     try {
       await commentsApi.update(editingId, editContent);
+      setComments(prev => prev.map(c => c.comment_id === editingId ? {...c, content: editContent, updated_at: new Date().toISOString()} : c));
       setEditingId(null);
-      fetchComments();
     } catch (error) {
       console.error(error);
     }
@@ -113,7 +137,10 @@ export function LessonComments({ lessonId, accentColor, onClose }: LessonComment
             </div>
             <div>
                 <h3 className="font-semibold text-sm">Strefa Dyskusji</h3>
-                <p className="text-[10px] text-muted-foreground">Czat lekcyjny</p>
+                <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"/>
+                    Czat na żywo
+                </p>
             </div>
         </div>
         {onClose && (
@@ -254,11 +281,11 @@ export function LessonComments({ lessonId, accentColor, onClose }: LessonComment
                 <div className="absolute right-1 top-1">
                     <Button 
                         onClick={handleAddComment} 
-                        disabled={isLoading || !newComment.trim()} 
+                        disabled={isSending || !newComment.trim()} 
                         size="icon"
                         className={cn("h-8 w-8 rounded-lg transition-all", newComment.trim() ? "bg-primary" : "bg-muted text-muted-foreground hover:bg-muted")}
                     >
-                        {isLoading ? <span className="animate-spin h-3 w-3 border-2 border-current border-t-transparent rounded-full" /> : <Send className="h-4 w-4 ml-0.5" />}
+                        {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 ml-0.5" />}
                     </Button>
                 </div>
             </div>

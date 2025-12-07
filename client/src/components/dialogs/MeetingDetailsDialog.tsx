@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CalendarDays, Clock, MapPin, Video, Play, CheckSquare, LogOut, Loader2 } from "lucide-react";
+import { CalendarDays, Clock, MapPin, Video, Play, CheckSquare, LogOut, Loader2, Lock } from "lucide-react";
 import type { Meeting } from "@/types/Meeting";
-import { format, isPast } from "date-fns";
+import { format, isPast, subMinutes, isBefore } from "date-fns";
 import { pl } from "date-fns/locale";
 import { meetingsApi } from "@/api/meetings";
 import { hexToRgba } from "@/lib/colors";
@@ -20,6 +20,8 @@ interface Props {
 export function MeetingDetailsDialog({ meeting, isOpen, onClose, isTeacher, onRefresh }: Props) {
   const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
   const [localStatus, setLocalStatus] = useState(meeting?.status);
+  
+  const [, setTick] = useState(0);
 
   useEffect(() => {
       if(isOpen && meeting) {
@@ -27,6 +29,12 @@ export function MeetingDetailsDialog({ meeting, isOpen, onClose, isTeacher, onRe
           setIsConfirmingCancel(false);
       }
   }, [isOpen, meeting]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(timer);
+  }, [isOpen]);
 
   if (!meeting) return null;
 
@@ -41,6 +49,12 @@ export function MeetingDetailsDialog({ meeting, isOpen, onClose, isTeacher, onRe
 
   const accentColor = meeting.workplace_color || "#3b82f6";
 
+  const now = new Date();
+  const canJoinTime = subMinutes(meetingStart, 15);
+  const isTooEarly = isBefore(now, canJoinTime);
+  const hasStarted = meeting.started_at != null;
+  const canJoin = isTeacher || !isTooEarly || hasStarted;
+
   const handleStartMeeting = async () => {
     const url = isTeacher ? meeting.zoom_start_url : meeting.zoom_join_url;
     if (!url) {
@@ -52,6 +66,7 @@ export function MeetingDetailsDialog({ meeting, isOpen, onClose, isTeacher, onRe
     if (isTeacher && effectiveStatus === 'planned') {
         try {
             await meetingsApi.startEarly(meeting.meeting_id);
+            onRefresh();
         } catch (e) { console.error(e); }
     }
   };
@@ -100,6 +115,7 @@ export function MeetingDetailsDialog({ meeting, isOpen, onClose, isTeacher, onRe
              {effectiveStatus === 'cancelled' && <Badge variant="destructive">Odwołana</Badge>}
              {effectiveStatus === 'completed' && <Badge variant="secondary" className="bg-green-100 text-green-700">Odbyta</Badge>}
              {effectiveStatus === 'pending' && <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">Oczekuje na potwierdzenie</Badge>}
+             {hasStarted && effectiveStatus === 'planned' && <Badge className="bg-green-500 hover:bg-green-600">Trwa</Badge>}
           </div>
           <DialogTitle className="text-2xl leading-tight">{meeting.title}</DialogTitle>
         </DialogHeader>
@@ -122,9 +138,26 @@ export function MeetingDetailsDialog({ meeting, isOpen, onClose, isTeacher, onRe
 
             {isOnline && effectiveStatus !== 'cancelled' && effectiveStatus !== 'completed' && (
                 <div className="flex flex-col gap-3">
-                    <Button onClick={handleStartMeeting} className="w-full gap-2 h-12 text-base" style={{ backgroundColor: accentColor }}>
-                        {isTeacher ? <><Play className="h-5 w-5" /> {effectiveStatus === 'pending' ? 'Wróć do spotkania' : 'Rozpocznij spotkanie'}</> : <><Video className="h-5 w-5" /> Dołącz do spotkania</>}
+                    <Button 
+                        onClick={handleStartMeeting} 
+                        disabled={!canJoin}
+                        className="w-full gap-2 h-12 text-base transition-all" 
+                        style={{ backgroundColor: canJoin ? accentColor : '#9ca3af', opacity: canJoin ? 1 : 0.7 }}
+                    >
+                        {isTeacher ? (
+                            <><Play className="h-5 w-5" /> {effectiveStatus === 'pending' ? 'Wróć do spotkania' : 'Rozpocznij spotkanie'}</>
+                        ) : (
+                            <>
+                                {canJoin ? <Video className="h-5 w-5" /> : <Lock className="h-4 w-4"/>} 
+                                {canJoin ? "Dołącz do spotkania" : "Jeszcze za wcześnie"}
+                            </>
+                        )}
                     </Button>
+                    {!canJoin && !isTeacher && (
+                         <p className="text-xs text-center text-muted-foreground">
+                             Możesz dołączyć 15 minut przed czasem lub gdy nauczyciel rozpocznie lekcję.
+                         </p>
+                    )}
                     
                     {isTeacher && effectiveStatus === 'planned' && (
                         <Button variant="outline" onClick={handleFinish} className="w-full text-orange-600 hover:text-orange-700 border-orange-200">

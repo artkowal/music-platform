@@ -15,9 +15,7 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, UPLOADS_DIR);
-  },
+  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
   filename: (req, file, cb) => {
     const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
@@ -31,14 +29,14 @@ const upload = multer({ storage });
  * @swagger
  * tags:
  *   - name: Lessons
- *     description: Podstawowe operacje CRUD na lekcjach (bez logiki spotkań)
+ *     description: Operacje CRUD oraz materiały i postęp dla lekcji
  */
 
 /**
  * @swagger
  * /api/lessons/course/{courseId}:
  *   get:
- *     summary: Pobiera listę lekcji w kursie (łącznie z danymi Zoom i potwierdzeniami)
+ *     summary: Pobiera wszystkie lekcje w danym kursie (wraz z Zoom, materiałami, potwierdzeniami i postępem)
  *     tags: [Lessons]
  *     security:
  *       - cookieAuth: []
@@ -48,6 +46,7 @@ const upload = multer({ storage });
  *         required: true
  *         schema:
  *           type: integer
+ *         description: ID kursu
  *     responses:
  *       200:
  *         description: Lista lekcji
@@ -73,21 +72,18 @@ router.get('/course/:courseId', protect, async (req, res) => {
 
     const [lessons] = await dbPool.execute(query, params);
 
-    let targetStudentId = null;
-    
-    if (req.user.role === 'student') {
-        targetStudentId = req.user.user_id;
-    } else if (req.user.role === 'teacher') {
-        const [enrollments] = await dbPool.execute(
-            'SELECT student_id FROM Enrollments WHERE course_id = ? LIMIT 1',
-            [req.params.courseId]
-        );
-        if (enrollments.length > 0) targetStudentId = enrollments[0].student_id;
+    let targetStudentId = req.user.role === 'student' ? req.user.user_id : null;
+
+    if (req.user.role === 'teacher') {
+      const [enrollments] = await dbPool.execute(
+        'SELECT student_id FROM Enrollments WHERE course_id = ? LIMIT 1',
+        [req.params.courseId]
+      );
+      if (enrollments.length > 0) targetStudentId = enrollments[0].student_id;
     }
 
     for (let lesson of lessons) {
-      
-      // 1. Potwierdzenia
+
       const [confirms] = await dbPool.execute(`
         SELECT u.role 
         FROM Lesson_Confirmations lc 
@@ -98,24 +94,20 @@ router.get('/course/:courseId', protect, async (req, res) => {
       lesson.is_confirmed_by_teacher = confirms.some(c => c.role === 'teacher');
       lesson.is_confirmed_by_student = confirms.some(c => c.role === 'student');
 
-      // 2. Materiały
       const [materials] = await dbPool.execute(
         'SELECT * FROM Materials WHERE lesson_id = ?',
         [lesson.lesson_id]
       );
       lesson.materials = materials;
 
-      // 3. Postęp (Jeżeli mamy zidentyfikowanego ucznia)
-      lesson.progress = { time_spent_seconds: 0, is_completed: 0, completed_at: null }; // Domyślnie
+      lesson.progress = { time_spent_seconds: 0, is_completed: 0, completed_at: null };
 
       if (targetStudentId) {
         const [progress] = await dbPool.execute(
           'SELECT time_spent_seconds, is_completed, completed_at FROM Lesson_Progress WHERE lesson_id = ? AND student_id = ?',
           [lesson.lesson_id, targetStudentId]
         );
-        if (progress.length > 0) {
-            lesson.progress = progress[0];
-        }
+        if (progress.length > 0) lesson.progress = progress[0];
       }
     }
 
@@ -130,10 +122,37 @@ router.get('/course/:courseId', protect, async (req, res) => {
  * @swagger
  * /api/lessons:
  *   post:
- *     summary: Tworzy nową lekcję standardową (z plikami)
+ *     summary: Tworzy nową lekcję (stacjonarną) z materiałami
  *     tags: [Lessons]
  *     security:
  *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               course_id:
+ *                 type: integer
+ *               title:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               duration_minutes:
+ *                 type: integer
+ *               is_visible:
+ *                 type: boolean
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *     responses:
+ *       201:
+ *         description: Lekcja utworzona
+ *       403:
+ *         description: Brak uprawnień
  */
 router.post('/', protect, upload.array('files'), async (req, res) => {
   if (req.user.role !== 'teacher') {
@@ -168,23 +187,37 @@ router.post('/', protect, upload.array('files'), async (req, res) => {
 
     const lessonId = lessonResult.insertId;
 
-    // Materiały
     if (files?.length > 0) {
       for (const file of files) {
         const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
         const relativePath = `uploads/${file.filename}`;
 
         await connection.execute(
-          `
-          INSERT INTO Materials (lesson_id, title, file_path)
-          VALUES (?, ?, ?)
-          `,
+          'INSERT INTO Materials (lesson_id, title, file_path) VALUES (?, ?, ?)',
           [lessonId, originalName, relativePath]
         );
       }
     }
 
     await connection.commit();
+
+    const [courseRows] = await dbPool.execute('SELECT title FROM Courses WHERE course_id = ?', [course_id]);
+    const courseTitle = courseRows.length > 0 ? courseRows[0].title : 'Kurs';
+
+    const [students] = await dbPool.execute('SELECT student_id FROM Enrollments WHERE course_id = ?', [course_id]);
+
+    const io = req.app.get('io');
+    if (io && students.length > 0) {
+      students.forEach(s => {
+        io.to(`user_${s.student_id}`).emit('notification', {
+          type: 'info',
+          title: 'Nowa lekcja!',
+          description: `Dodano nową lekcję "${title}" w kursie "${courseTitle}".`,
+          link: `/dashboard/courses/${course_id}/lessons/${lessonId}`
+        });
+      });
+    }
+
     res.status(201).json({ success: true, message: 'Lekcja utworzona' });
   } catch (error) {
     await connection.rollback();
@@ -201,6 +234,34 @@ router.post('/', protect, upload.array('files'), async (req, res) => {
  *   put:
  *     summary: Aktualizuje dane lekcji
  *     tags: [Lessons]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               duration_minutes:
+ *                 type: integer
+ *               is_visible:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Zaktualizowano lekcję
+ *       403:
+ *         description: Brak uprawnień
  */
 router.put('/:id', protect, async (req, res) => {
   if (req.user.role !== 'teacher') {
@@ -233,8 +294,21 @@ router.put('/:id', protect, async (req, res) => {
  * @swagger
  * /api/lessons/{id}:
  *   delete:
- *     summary: Usuwa lekcję (trwale)
+ *     summary: Usuwa lekcję
  *     tags: [Lessons]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Lekcja usunięta
+ *       403:
+ *         description: Brak uprawnień
  */
 router.delete('/:id', protect, async (req, res) => {
   if (req.user.role !== 'teacher') {
@@ -260,6 +334,29 @@ router.delete('/:id', protect, async (req, res) => {
  *   post:
  *     summary: Dodaje materiały do istniejącej lekcji
  *     tags: [Lessons]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *     responses:
+ *       200:
+ *         description: Materiały dodane
  */
 router.post('/:id/materials', protect, upload.array('files'), async (req, res) => {
   if (req.user.role !== 'teacher') {
@@ -276,10 +373,7 @@ router.post('/:id/materials', protect, upload.array('files'), async (req, res) =
         const relativePath = `uploads/${file.filename}`;
 
         await dbPool.execute(
-          `
-          INSERT INTO Materials (lesson_id, title, file_path)
-          VALUES (?, ?, ?)
-          `,
+          'INSERT INTO Materials (lesson_id, title, file_path) VALUES (?, ?, ?)',
           [lessonId, originalName, relativePath]
         );
       }
@@ -298,6 +392,24 @@ router.post('/:id/materials', protect, upload.array('files'), async (req, res) =
  *   delete:
  *     summary: Usuwa pojedynczy materiał
  *     tags: [Lessons]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: materialId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Materiał usunięty
+ *       404:
+ *         description: Nie znaleziono materiału
  */
 router.delete('/:id/materials/:materialId', protect, async (req, res) => {
   if (req.user.role !== 'teacher') {
@@ -338,8 +450,30 @@ router.delete('/:id/materials/:materialId', protect, async (req, res) => {
  * @swagger
  * /api/lessons/{id}/progress:
  *   post:
- *     summary: Aktualizuje postęp ucznia
+ *     summary: Aktualizuje postęp ucznia w lekcji
  *     tags: [Lessons]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               time_spent:
+ *                 type: integer
+ *               is_completed:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Postęp zapisany
  */
 router.post('/:id/progress', protect, async (req, res) => {
   const { time_spent, is_completed } = req.body;
@@ -363,6 +497,29 @@ router.post('/:id/progress', protect, async (req, res) => {
       `,
       [studentId, lessonId, time_spent, is_completed, is_completed]
     );
+
+    if (is_completed == 1) {
+      const [lessonData] = await dbPool.execute(`
+            SELECT l.title, c.teacher_id, c.course_id
+            FROM Lessons l
+            JOIN Courses c ON l.course_id = c.course_id
+            WHERE l.lesson_id = ?`, 
+        [lessonId]
+      );
+        
+      if (lessonData.length > 0) {
+        const { title, teacher_id, course_id } = lessonData[0];
+        const io = req.app.get('io');
+        if (io) {
+          io.to(`user_${teacher_id}`).emit('notification', {
+            type: 'success',
+            title: 'Lekcja ukończona',
+            description: `Uczeń ${req.user.first_name} ${req.user.last_name} ukończył lekcję "${title}".`,
+            link: `/dashboard/courses/${course_id}/lessons/${lessonId}`
+          });
+        }
+      }
+    }
 
     res.json({ success: true });
   } catch (error) {
