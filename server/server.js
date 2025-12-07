@@ -7,6 +7,9 @@ const cookieParser = require('cookie-parser');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const path = require('path');
+const http = require('http');
+const { Server } = require("socket.io");
+const { initSocket } = require('./services/socket');
 
 const swaggerOptions = require('./swaggerConfig');
 const mainRouter = require('./routes'); 
@@ -35,8 +38,20 @@ app.use('/api', mainRouter);
 // --- Globalna Obsługa Błędów ---
 app.use(handleError);
 
+// --- Konfiguracja SOCKET.IO ---
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: ["http://localhost:5173"],
+    credentials: true
+  }
+});
+app.set('io', io);
+initSocket(io);
+
 // --- Uruchomienie Serwera ---
-app.listen(PORT, () => {
-  console.log(`Backend server is running on http://localhost:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Backend server (HTTP + WebSocket) running on http://localhost:${PORT}`);
   console.log(`Swagger docs available at http://localhost:5001/api-docs`);
 });

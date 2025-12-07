@@ -4,16 +4,18 @@ import { lessonsApi } from "@/api/Lesson";
 import { coursesApi } from "@/api/courses";
 import { commentsApi } from "@/api/comments";
 import { useAuth } from "@/hooks/useAuth";
+import { useSocket } from "@/context/SocketContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PenLine, Save, Upload, Trash2, Eye, EyeOff, MessageCircle } from "lucide-react";
+import { PenLine, Save, Trash2, Eye, EyeOff, MessageCircle } from "lucide-react";
 import type { Lesson } from "@/types/Lesson";
 import type { Course } from "@/types/Course";
 import type { Student } from "@/types/Student";
+import type { Comment } from "@/types/Comment";
 
 import { LessonHeader } from "./components/LessonHeader";
 import { LessonMaterials } from "./components/LessonMaterials";
@@ -24,6 +26,7 @@ export default function DashboardLessonPage() {
   const { courseId, lessonId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { socket } = useSocket();
   const isTeacher = user?.role === 'teacher';
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
@@ -85,12 +88,32 @@ export default function DashboardLessonPage() {
     fetchData();
   }, [courseId, lessonId, navigate]); 
 
+  useEffect(() => {
+    if (!lessonId || !user || !socket) return;
+
+    socket.emit("join_lesson", Number(lessonId));
+
+    const handleReceiveComment = (comment: Comment) => {
+        if (comment.user_id !== user.user_id && !isChatOpen) {
+            setUnreadCount((prev) => prev + 1);
+        }
+    };
+
+    socket.on("receive_comment", handleReceiveComment);
+
+    return () => {
+      socket.off("receive_comment", handleReceiveComment);
+    };
+  }, [lessonId, user, socket, isChatOpen]);
+
+
+
   const handleOpenChat = async () => {
     setIsChatOpen(true);
-    if (unreadCount > 0 && lessonId) {
+    setUnreadCount(0);
+    if (lessonId) {
         try {
             await commentsApi.markAsRead(lessonId);
-            setUnreadCount(0);
         } catch (error) {
             console.error("Błąd oznaczania jako przeczytane", error);
         }
@@ -112,7 +135,6 @@ export default function DashboardLessonPage() {
             newFiles.forEach(f => formData.append('files', f));
             await lessonsApi.addMaterials(lesson.lesson_id, formData);
         }
-
         window.location.reload(); 
     } catch (error) {
         console.error(error);
@@ -122,14 +144,12 @@ export default function DashboardLessonPage() {
 
   const handleDeleteLesson = async () => {
     if (!lesson) return;
-    if (!confirm("Czy na pewno chcesz usunąć tę lekcję? Tej operacji nie można cofnąć.")) return;
-    
+    if (!confirm("Czy na pewno chcesz usunąć tę lekcję?")) return;
     try {
         await lessonsApi.delete(lesson.lesson_id);
         navigate(`/dashboard/courses/${courseId}`);
     } catch (error) {
         console.error(error);
-        alert("Błąd podczas usuwania lekcji");
     }
   };
 
@@ -144,7 +164,6 @@ export default function DashboardLessonPage() {
         }) : null);
     } catch (error) {
         console.error(error);
-        alert("Błąd usuwania pliku");
     }
   };
 
@@ -245,11 +264,6 @@ export default function DashboardLessonPage() {
                                 onChange={(e) => e.target.files && setNewFiles(Array.from(e.target.files))}
                             />
                         </div>
-                        {newFiles.length > 0 && (
-                            <div className="mt-2 text-xs text-green-600 flex items-center gap-1 bg-green-50 p-2 rounded border border-green-200">
-                                <Upload className="h-3 w-3" /> Gotowe do wysłania: {newFiles.length} plików.
-                            </div>
-                        )}
                     </div>
                 </Card>
 
@@ -276,7 +290,8 @@ export default function DashboardLessonPage() {
             </div>
         )}
       </div>
-        {/* Floating Chat*/}
+
+        {/* Floating Chat */}
         {!isEditing && (
             <>
                 <div 

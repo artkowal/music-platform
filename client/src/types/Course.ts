@@ -10,6 +10,7 @@ export interface Course {
   lesson_count?: number;
   teacher_name?: string;
   teacher_lastname?: string;
+  invite_code?: string;
 }
 
 export type CourseData = {

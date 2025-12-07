@@ -26,5 +26,11 @@ export const coursesApi = {
   },
   removeStudent: async (courseId: string | number, studentId: number) => {
     return await api.delete(`/courses/${courseId}/students/${studentId}`);
+  },
+  joinByCode: async (code: string) => {
+    return await api.post('/courses/join', { code });
+  },
+  leaveCourse: async (courseId: number) => {
+    return await api.delete(`/courses/${courseId}/leave`);
   }
 };

@@ -30,9 +30,9 @@ router.get('/', protect, async (req, res) => {
 
   if (req.user.role === 'teacher') {
     query = `
-      SELECT c.*, w.name as workplace_name, w.color_hex,
-      (SELECT COUNT(*) FROM Enrollments e WHERE e.course_id = c.course_id) as student_count,
-      (SELECT COUNT(*) FROM Lessons l WHERE l.course_id = c.course_id) as lesson_count
+      SELECT c.*, w.name AS workplace_name, w.color_hex,
+      (SELECT COUNT(*) FROM Enrollments e WHERE e.course_id = c.course_id) AS student_count,
+      (SELECT COUNT(*) FROM Lessons l WHERE l.course_id = c.course_id) AS lesson_count
       FROM Courses c
       LEFT JOIN Workplaces w ON c.workplace_id = w.workplace_id
       WHERE c.teacher_id = ?
@@ -41,8 +41,8 @@ router.get('/', protect, async (req, res) => {
     params = [req.user.user_id];
   } else {
     query = `
-      SELECT c.*, w.name as workplace_name, w.color_hex, u.first_name as teacher_name, u.last_name as teacher_lastname,
-      (SELECT COUNT(*) FROM Lessons l WHERE l.course_id = c.course_id) as lesson_count
+      SELECT c.*, w.name AS workplace_name, w.color_hex, u.first_name AS teacher_name, u.last_name AS teacher_lastname,
+      (SELECT COUNT(*) FROM Lessons l WHERE l.course_id = c.course_id) AS lesson_count
       FROM Enrollments e
       JOIN Courses c ON e.course_id = c.course_id
       LEFT JOIN Workplaces w ON c.workplace_id = w.workplace_id
@@ -57,7 +57,6 @@ router.get('/', protect, async (req, res) => {
     const [rows] = await dbPool.execute(query, params);
     res.json({ success: true, data: rows });
   } catch (error) {
-    console.error('Błąd pobierania kursów:', error);
     res.status(500).json({ message: 'Błąd serwera przy pobieraniu kursów.' });
   }
 });
@@ -116,7 +115,6 @@ router.post('/', protect, async (req, res) => {
 
     const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-    // Tworzenie kursu
     const [result] = await connection.execute(
       `INSERT INTO Courses (teacher_id, workplace_id, title, description, course_type, invite_code)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -125,7 +123,6 @@ router.post('/', protect, async (req, res) => {
 
     const courseId = result.insertId;
 
-    // Dodawanie uczniów
     if (student_emails && Array.isArray(student_emails) && student_emails.length > 0) {
       const cleanEmails = student_emails
         .map((e) => e.trim())
@@ -133,7 +130,6 @@ router.post('/', protect, async (req, res) => {
 
       if (cleanEmails.length > 0) {
         const placeholders = cleanEmails.map(() => '?').join(',');
-
         const [students] = await connection.execute(
           `SELECT user_id, email FROM Users WHERE role = 'student' AND email IN (${placeholders})`,
           cleanEmails
@@ -144,6 +140,16 @@ router.post('/', protect, async (req, res) => {
             'INSERT IGNORE INTO Enrollments (student_id, course_id) VALUES (?, ?)',
             [student.user_id, courseId]
           );
+
+          const io = req.app.get('io');
+          if (io) {
+            io.to(`user_${student.user_id}`).emit('notification', {
+              type: 'info',
+              title: 'Zostałeś dodany do kursu!',
+              description: `Nauczyciel dodał Cię do nowego kursu: "${title}"`,
+              link: `/dashboard/courses/${courseId}`
+            });
+          }
         }
       }
     }
@@ -152,7 +158,6 @@ router.post('/', protect, async (req, res) => {
     res.status(201).json({ success: true, message: 'Kurs utworzony.' });
   } catch (error) {
     await connection.rollback();
-    console.error('Błąd tworzenia kursu:', error);
     res.status(500).json({ message: 'Błąd podczas tworzenia kursu.' });
   } finally {
     connection.release();
@@ -180,13 +185,34 @@ router.post('/', protect, async (req, res) => {
 router.delete('/:id', protect, async (req, res) => {
   if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Brak uprawnień.' });
 
-  const [result] = await dbPool.execute(
-    'DELETE FROM Courses WHERE course_id = ? AND teacher_id = ?',
-    [req.params.id, req.user.user_id]
+  const courseId = req.params.id;
+
+  const [courseRows] = await dbPool.execute(
+    'SELECT title FROM Courses WHERE course_id = ? AND teacher_id = ?',
+    [courseId, req.user.user_id]
   );
 
-  if (result.affectedRows === 0) {
+  if (courseRows.length === 0) {
     return res.status(404).json({ message: 'Nie znaleziono kursu.' });
+  }
+
+  const courseTitle = courseRows[0].title;
+  const [students] = await dbPool.execute('SELECT student_id FROM Enrollments WHERE course_id = ?', [courseId]);
+
+  await dbPool.execute(
+    'DELETE FROM Courses WHERE course_id = ? AND teacher_id = ?',
+    [courseId, req.user.user_id]
+  );
+
+  const io = req.app.get('io');
+  if (io && students.length > 0) {
+    students.forEach(s => {
+      io.to(`user_${s.student_id}`).emit('notification', {
+        type: 'warning',
+        title: 'Kurs został usunięty',
+        description: `Nauczyciel usunął kurs "${courseTitle}".`
+      });
+    });
   }
 
   res.json({ success: true, message: 'Kurs usunięty.' });
@@ -196,7 +222,7 @@ router.delete('/:id', protect, async (req, res) => {
  * @swagger
  * /api/courses/{id}:
  *   put:
- *     summary: Edytuje kurs (np. zmiana tytułu, placówki)
+ *     summary: Edytuje kurs
  *     tags: [Courses]
  *     security:
  *       - cookieAuth: []
@@ -235,7 +261,7 @@ router.put('/:id', protect, async (req, res) => {
   await dbPool.execute(
     `UPDATE Courses
      SET title = COALESCE(?, title),
-         workplace_id = ?, 
+         workplace_id = ?,
          description = COALESCE(?, description),
          course_type = COALESCE(?, course_type)
      WHERE course_id = ? AND teacher_id = ?`,
@@ -281,15 +307,13 @@ router.put('/:id', protect, async (req, res) => {
  *       200:
  *         description: Uczeń dodany
  *       404:
- *         description: Uczeń o podanym emailu nie istnieje
+ *         description: Uczeń nie istnieje
  */
 router.post('/:id/enroll', protect, async (req, res) => {
-  if (req.user.role !== 'teacher')
-    return res.status(403).json({ message: 'Brak uprawnień.' });
+  if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Brak uprawnień.' });
 
   const { email } = req.body;
   const courseId = req.params.id;
-
   const cleanEmail = email ? email.trim() : '';
 
   const [users] = await dbPool.execute(
@@ -297,25 +321,33 @@ router.post('/:id/enroll', protect, async (req, res) => {
     [cleanEmail]
   );
 
-  if (users.length === 0) {
-    return res.status(404).json({ message: 'Nie znaleziono ucznia o podanym adresie email.' });
-  }
+  if (users.length === 0) return res.status(404).json({ message: 'Nie znaleziono ucznia.' });
 
   const studentId = users[0].user_id;
 
   const [courseCheck] = await dbPool.execute(
-    'SELECT course_id FROM Courses WHERE course_id = ? AND teacher_id = ?',
+    'SELECT course_id, title FROM Courses WHERE course_id = ? AND teacher_id = ?',
     [courseId, req.user.user_id]
   );
 
-  if (courseCheck.length === 0) {
-    return res.status(403).json({ message: 'To nie jest Twój kurs.' });
-  }
+  if (courseCheck.length === 0) return res.status(403).json({ message: 'To nie jest Twój kurs.' });
+
+  const courseTitle = courseCheck[0].title;
 
   await dbPool.execute(
     'INSERT IGNORE INTO Enrollments (student_id, course_id) VALUES (?, ?)',
     [studentId, courseId]
   );
+
+  const io = req.app.get('io');
+  if (io) {
+    io.to(`user_${studentId}`).emit('notification', {
+      type: 'info',
+      title: 'Zostałeś dodany do kursu!',
+      description: `Nauczyciel dodał Cię do kursu: "${courseTitle}"`,
+      link: `/dashboard/courses/${courseId}`
+    });
+  }
 
   res.json({ success: true, message: 'Uczeń dodany do kursu.' });
 });
@@ -349,18 +381,27 @@ router.delete('/:id/students/:studentId', protect, async (req, res) => {
   const { id, studentId } = req.params;
 
   const [courseCheck] = await dbPool.execute(
-    'SELECT course_id FROM Courses WHERE course_id = ? AND teacher_id = ?',
+    'SELECT title FROM Courses WHERE course_id = ? AND teacher_id = ?',
     [id, req.user.user_id]
   );
 
-  if (courseCheck.length === 0) {
-    return res.status(403).json({ message: 'To nie jest Twój kurs.' });
-  }
+  if (courseCheck.length === 0) return res.status(403).json({ message: 'To nie jest Twój kurs.' });
+
+  const courseTitle = courseCheck[0].title;
 
   await dbPool.execute(
     'DELETE FROM Enrollments WHERE course_id = ? AND student_id = ?',
     [id, studentId]
   );
+
+  const io = req.app.get('io');
+  if (io) {
+    io.to(`user_${studentId}`).emit('notification', {
+      type: 'warning',
+      title: 'Zostałeś usunięty z kursu',
+      description: `Nauczyciel usunął Cię z kursu "${courseTitle}".`
+    });
+  }
 
   res.json({ success: true, message: 'Uczeń usunięty z kursu.' });
 });
@@ -391,17 +432,17 @@ router.get('/:id/details', protect, async (req, res) => {
   let query = '';
   let params = [];
 
-if (userRole === 'teacher') {
+  if (userRole === 'teacher') {
     query = `
-      SELECT c.*, w.color_hex, w.name as workplace_name 
-      FROM Courses c 
+      SELECT c.*, w.color_hex, w.name AS workplace_name
+      FROM Courses c
       LEFT JOIN Workplaces w ON c.workplace_id = w.workplace_id
       WHERE c.course_id = ? AND c.teacher_id = ?
     `;
     params = [courseId, userId];
   } else {
     query = `
-      SELECT c.*, w.color_hex, w.name as workplace_name, u.first_name as teacher_name, u.last_name as teacher_lastname
+      SELECT c.*, w.color_hex, w.name AS workplace_name, u.first_name AS teacher_name, u.last_name AS teacher_lastname
       FROM Courses c
       JOIN Enrollments e ON c.course_id = e.course_id
       JOIN Users u ON c.teacher_id = u.user_id
@@ -421,24 +462,140 @@ if (userRole === 'teacher') {
     let studentRows = [];
     if (userRole === 'teacher') {
       [studentRows] = await dbPool.execute(
-        `SELECT u.user_id, u.email, u.first_name, u.last_name 
-         FROM Enrollments e 
-         JOIN Users u ON e.student_id = u.user_id 
+        `SELECT u.user_id, u.email, u.first_name, u.last_name
+         FROM Enrollments e
+         JOIN Users u ON e.student_id = u.user_id
          WHERE e.course_id = ?`,
         [courseId]
       );
     }
 
-    res.json({ 
-      success: true, 
-      course: courseRows[0], 
+    res.json({
+      success: true,
+      course: courseRows[0],
       students: studentRows
     });
 
   } catch (error) {
-    console.error("Błąd pobierania szczegółów kursu:", error);
     res.status(500).json({ message: 'Błąd serwera.' });
   }
+});
+
+/**
+ * @swagger
+ * /api/courses/join:
+ *   post:
+ *     summary: Uczeń dołącza do kursu za pomocą kodu
+ *     tags: [Courses]
+ *     security:
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - code
+ *             properties:
+ *               code:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Dołączono pomyślnie
+ *       400:
+ *         description: Już jesteś w tym kursie lub brak kodu
+ *       404:
+ *         description: Nieprawidłowy kod
+ */
+router.post('/join', protect, async (req, res) => {
+  if (req.user.role !== 'student') return res.status(403).json({ message: 'Tylko uczniowie mogą dołączać.' });
+
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ message: 'Kod wymagany.' });
+
+  const [courses] = await dbPool.execute(
+    'SELECT course_id, teacher_id, title FROM Courses WHERE invite_code = ?',
+    [code.toUpperCase()]
+  );
+
+  if (courses.length === 0) return res.status(404).json({ message: 'Nieprawidłowy kod.' });
+
+  const { course_id, teacher_id, title } = courses[0];
+
+  try {
+    await dbPool.execute(
+      'INSERT INTO Enrollments (student_id, course_id) VALUES (?, ?)',
+      [req.user.user_id, course_id]
+    );
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user_${teacher_id}`).emit('notification', {
+        type: 'info',
+        title: 'Nowy uczeń!',
+        description: `${req.user.first_name} ${req.user.last_name} dołączył do kursu "${title}"`,
+        link: `/dashboard/courses/${course_id}`
+      });
+    }
+
+    res.json({ success: true, message: 'Dołączono.' });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ message: 'Już jesteś na tym kursie.' });
+    }
+    res.status(500).json({ message: 'Błąd serwera.' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/courses/{id}/leave:
+ *   delete:
+ *     summary: Uczeń opuszcza kurs
+ *     tags: [Courses]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Opuszczono kurs
+ *       403:
+ *         description: Brak uprawnień
+ */
+router.delete('/:id/leave', protect, async (req, res) => {
+  if (req.user.role !== 'student') return res.status(403).json({ message: 'Brak uprawnień.' });
+
+  const courseId = req.params.id;
+
+  const [courses] = await dbPool.execute(
+    'SELECT teacher_id, title FROM Courses WHERE course_id = ?',
+    [courseId]
+  );
+
+  await dbPool.execute(
+    'DELETE FROM Enrollments WHERE course_id = ? AND student_id = ?',
+    [courseId, req.user.user_id]
+  );
+
+  if (courses.length > 0) {
+    const { teacher_id, title } = courses[0];
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user_${teacher_id}`).emit('notification', {
+        type: 'warning',
+        title: 'Uczeń opuścił kurs',
+        description: `${req.user.first_name} ${req.user.last_name} opuścił kurs "${title}"`
+      });
+    }
+  }
+
+  res.json({ success: true, message: 'Opuszczono kurs.' });
 });
 
 module.exports = router;

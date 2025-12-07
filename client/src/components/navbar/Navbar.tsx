@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -15,6 +13,7 @@ import { NavbarBreadcrumbs } from "./components/NavbarBreadcrumbs";
 import { NavbarUserDesktop } from "./components/NavbarUserDesktop"; 
 import { NavbarUserMobile } from "./components/NavbarUserMobile";   
 import { NavbarMobileMenu } from "./components/NavbarMobileMenu";
+import { NavbarNotifications } from "./components/NavbarNotifications";
 
 export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -54,13 +53,18 @@ export default function Navbar() {
           )}
         </div>
 
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-2 md:flex">
           <ThemeToggle />
+          
+          {user && (
+             <NavbarNotifications />
+          )}
+
           {user ? (
             <NavbarUserDesktop /> 
           ) : (
             <>
-              <Button asChild variant="outline">
+              <Button asChild variant="outline" className="ml-2">
                 <Link to="/login">
                   <LogIn className="mr-2 h-4 w-4" />
                   Zaloguj się
@@ -79,6 +83,8 @@ export default function Navbar() {
         <div className="flex items-center gap-2 md:hidden">
           <ThemeToggle />
           
+          {user && <NavbarNotifications />}
+
           {!user && !isDashboard && (
             <Button
               variant="ghost"

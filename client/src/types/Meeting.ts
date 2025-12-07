@@ -11,6 +11,8 @@ export interface Meeting {
   
   zoom_join_url?: string;
   zoom_start_url?: string;
+
+  started_at?: string | null;
   
   is_confirmed_by_teacher: boolean | number;
   is_confirmed_by_student: boolean | number;

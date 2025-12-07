@@ -25,25 +25,27 @@ const autoCompleteStationaryLessons = async (connection) => {
  * /api/meetings/calendar:
  *   get:
  *     summary: Pobiera spotkania użytkownika w podanym zakresie dat
- *     description: |
- *       Zwraca spotkania nauczyciela lub ucznia w obrębie podanego zakresu dat.
- *       Odwołane spotkania również są zwracane (dane historyczne).
+ *     tags: [Meetings]
+ *     security:
+ *       - cookieAuth: []
  *     parameters:
  *       - in: query
  *         name: start
  *         schema:
  *           type: string
  *           format: date-time
- *         required: false
+ *         description: Początek zakresu dat
  *       - in: query
  *         name: end
  *         schema:
  *           type: string
  *           format: date-time
- *         required: false
+ *         description: Koniec zakresu dat
  *     responses:
  *       200:
- *         description: Lista spotkań
+ *         description: Lista spotkań użytkownika
+ *       500:
+ *         description: Błąd podczas pobierania danych
  */
 router.get('/calendar', protect, async (req, res) => {
   const { start, end } = req.query;
@@ -108,14 +110,46 @@ router.get('/calendar', protect, async (req, res) => {
  * /api/meetings/schedule:
  *   post:
  *     summary: Tworzy jedno lub wiele zaplanowanych spotkań
- *     description: |
- *       Tworzy spotkania cykliczne lub pojedyncze, z obsługą Zoom.
- *       Automatycznie wykrywa konflikty czasowe.
+ *     tags: [Meetings]
+ *     security:
+ *       - cookieAuth: []
  *     requestBody:
  *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - course_id
+ *               - title
+ *               - scheduled_time
+ *               - duration_minutes
+ *               - type
+ *             properties:
+ *               course_id:
+ *                 type: integer
+ *               title:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               scheduled_time:
+ *                 type: string
+ *                 format: date-time
+ *               duration_minutes:
+ *                 type: integer
+ *               type:
+ *                 type: string
+ *                 enum: [online, stationary]
+ *               repeat_weeks:
+ *                 type: integer
+ *                 description: Ile tygodni powtarzać spotkanie
  *     responses:
  *       201:
- *         description: Zaplanowano spotkania
+ *         description: Utworzono spotkania
+ *       403:
+ *         description: Brak dostępu
+ *       409:
+ *         description: Konflikt terminów
  */
 router.post('/schedule', protect, async (req, res) => {
   const {
@@ -232,6 +266,31 @@ router.post('/schedule', protect, async (req, res) => {
     }
 
     await connection.commit();
+
+    const io = req.app.get('io');
+    if (io) {
+        if (req.user.role === 'teacher') {
+            // Nauczyciel zaplanował -> wyślij do uczniów
+            const [students] = await dbPool.execute('SELECT student_id FROM Enrollments WHERE course_id = ?', [course_id]);
+            students.forEach(s => {
+                io.to(`user_${s.student_id}`).emit('notification', {
+                    type: 'info',
+                    title: 'Nowe spotkanie',
+                    description: `Nauczyciel zaplanował spotkanie: "${title}"`,
+                    link: `/dashboard/calendar`
+                });
+            });
+        } else {
+            // Uczeń zaplanował -> wyślij do nauczyciela
+            io.to(`user_${teacherId}`).emit('notification', {
+                type: 'info',
+                title: 'Nowe spotkanie',
+                description: `Uczeń zaplanował spotkanie: "${title}"`,
+                link: `/dashboard/calendar`
+            });
+        }
+    }
+
     res.status(201).json({ success: true, message: 'Zaplanowano spotkania.' });
   } catch (error) {
     await connection.rollback();
@@ -246,6 +305,20 @@ router.post('/schedule', protect, async (req, res) => {
  * /api/meetings/course/{courseId}:
  *   get:
  *     summary: Pobiera listę spotkań kursu
+ *     tags: [Meetings]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: courseId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Lista spotkań kursu
+ *       500:
+ *         description: Błąd serwera
  */
 router.get('/course/:courseId', protect, async (req, res) => {
   const { courseId } = req.params;
@@ -267,14 +340,54 @@ router.get('/course/:courseId', protect, async (req, res) => {
  * /api/meetings/{id}/start-early:
  *   patch:
  *     summary: Oznacza wcześniejsze rozpoczęcie lekcji (nauczyciel)
+ *     tags: [Meetings]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Zaktualizowano dane spotkania
+ *       403:
+ *         description: Brak uprawnień
  */
 router.patch('/:id/start-early', protect, async (req, res) => {
   if (req.user.role !== 'teacher')
     return res.status(403).json({ message: 'Brak uprawnień' });
+  
+  const meetingId = req.params.id; 
+
   await dbPool.execute(
     'UPDATE Meetings SET started_at = NOW() WHERE meeting_id = ?',
-    [req.params.id]
+    [meetingId]
   );
+
+  const [meetingRows] = await dbPool.execute(
+      'SELECT course_id, title FROM Meetings WHERE meeting_id = ?', 
+      [meetingId] 
+  );
+
+  if (meetingRows.length > 0) {
+      const { course_id, title } = meetingRows[0];
+      const [students] = await dbPool.execute('SELECT student_id FROM Enrollments WHERE course_id = ?', [course_id]);
+      
+      const io = req.app.get('io');
+      if (io && students.length > 0) {
+          students.forEach(s => {
+            io.to(`user_${s.student_id}`).emit('notification', {
+                type: 'success',
+                title: 'Lekcja rozpoczęta!',
+                description: `Nauczyciel rozpoczął lekcję: "${title}". Dołącz teraz!`,
+                link: `/dashboard/courses/${course_id}`
+            });
+          });
+      }
+  }
+
   res.json({ success: true });
 });
 
@@ -282,7 +395,21 @@ router.patch('/:id/start-early', protect, async (req, res) => {
  * @swagger
  * /api/meetings/{id}/finish:
  *   patch:
- *     summary: Zamyka lekcję online i ustawia status pending
+ *     summary: Zamyka lekcję i ustawia status pending
+ *     tags: [Meetings]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Spotkanie zakończone
+ *       403:
+ *         description: Brak uprawnień
  */
 router.patch('/:id/finish', protect, async (req, res) => {
   if (req.user.role !== 'teacher')
@@ -309,6 +436,18 @@ router.patch('/:id/finish', protect, async (req, res) => {
  * /api/meetings/{id}/confirm:
  *   patch:
  *     summary: Potwierdza uczestnictwo w lekcji
+ *     tags: [Meetings]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Zapisano potwierdzenie
  */
 router.patch('/:id/confirm', protect, async (req, res) => {
   const { id } = req.params;
@@ -335,9 +474,23 @@ router.patch('/:id/confirm', protect, async (req, res) => {
  * /api/meetings/{id}/cancel:
  *   patch:
  *     summary: Anuluje spotkanie
+ *     tags: [Meetings]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Spotkanie anulowane
  */
 router.patch('/:id/cancel', protect, async (req, res) => {
   const role = req.user.role;
+  const userId = req.user.user_id;
+  const meetingId = req.params.id;
 
   await dbPool.execute(
     `
@@ -345,8 +498,44 @@ router.patch('/:id/cancel', protect, async (req, res) => {
     SET status = "cancelled", cancelled_by = ?
     WHERE meeting_id = ?
   `,
-    [role, req.params.id]
+    [role, meetingId]
   );
+
+  // --- POWIADOMIENIE O ODWOŁANIU ---
+  const io = req.app.get('io');
+  if (io) {
+      // Pobierz dane spotkania
+      const [meeting] = await dbPool.execute(
+          `SELECT m.title, c.teacher_id, m.course_id 
+           FROM Meetings m 
+           JOIN Courses c ON m.course_id = c.course_id 
+           WHERE m.meeting_id = ?`, 
+           [meetingId]
+      );
+
+      if (meeting.length > 0) {
+          const { title, teacher_id, course_id } = meeting[0];
+
+          if (role === 'teacher') {
+              // Nauczyciel odwołał -> powiadom wszystkich uczniów
+              const [students] = await dbPool.execute('SELECT student_id FROM Enrollments WHERE course_id = ?', [course_id]);
+              students.forEach(s => {
+                  io.to(`user_${s.student_id}`).emit('notification', {
+                      type: 'warning',
+                      title: 'Zajęcia odwołane',
+                      description: `Nauczyciel odwołał spotkanie: "${title}"`
+                  });
+              });
+          } else {
+              // Uczeń odwołał -> powiadom nauczyciela
+              io.to(`user_${teacher_id}`).emit('notification', {
+                  type: 'warning',
+                  title: 'Zajęcia odwołane',
+                  description: `Uczeń ${req.user.first_name} ${req.user.last_name} odwołał spotkanie: "${title}"`
+              });
+          }
+      }
+  }
 
   res.json({ success: true });
 });
@@ -376,6 +565,20 @@ async function checkCompletion(meetingId, pool) {
  * /api/meetings/{id}/report:
  *   get:
  *     summary: Pobiera raport Zoom lub lokalny raport spotkania
+ *     tags: [Meetings]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Raport spotkania
+ *       404:
+ *         description: Nie znaleziono raportu
  */
 router.get('/:id/report', protect, async (req, res) => {
   const { id } = req.params;
@@ -414,6 +617,20 @@ router.get('/:id/report', protect, async (req, res) => {
  * /api/meetings/{id}/zoom-report:
  *   get:
  *     summary: Wymusza pobranie najnowszego raportu Zoom
+ *     tags: [Meetings]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Zwraca najnowszy raport
+ *       404:
+ *         description: Brak raportu lub ID
  */
 router.get('/:id/zoom-report', protect, async (req, res) => {
   const { id } = req.params;
@@ -443,6 +660,26 @@ router.get('/:id/zoom-report', protect, async (req, res) => {
  * /api/meetings/availability:
  *   get:
  *     summary: Pobiera zajęte sloty nauczyciela dla danego dnia
+ *     tags: [Meetings]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: course_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *     responses:
+ *       200:
+ *         description: Lista zajętych terminów
+ *       400:
+ *         description: Brak parametrów
  */
 router.get('/availability', protect, async (req, res) => {
   const { course_id, date } = req.query;
@@ -480,6 +717,102 @@ router.get('/availability', protect, async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: 'Błąd' });
   }
+});
+
+/**
+ * @swagger
+ * /api/meetings/unconfirmed:
+ *   get:
+ *     summary: Zwraca najbliższe niepotwierdzone spotkanie ucznia
+ *     tags: [Meetings]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Zwraca najbliższe spotkanie w statusie pending, oczekujące na potwierdzenie ucznia
+ *       500:
+ *         description: Błąd serwera
+ */
+router.get('/unconfirmed', protect, async (req, res) => {
+  if (req.user.role === 'teacher') return res.json({ meeting: null });
+
+  const studentId = req.user.user_id;
+
+  try {
+    const [rows] = await dbPool.execute(`
+      SELECT m.meeting_id, m.title, m.scheduled_time, m.duration_minutes, 
+             u.first_name as teacher_name, u.last_name as teacher_lastname
+      FROM Meetings m
+      JOIN Courses c ON m.course_id = c.course_id
+      JOIN Users u ON c.teacher_id = u.user_id
+      JOIN Enrollments e ON c.course_id = e.course_id
+      WHERE e.student_id = ?
+        AND m.status = 'pending' 
+        AND m.is_confirmed_by_teacher = 1 
+        AND m.is_confirmed_by_student = 0
+      ORDER BY m.scheduled_time ASC
+      LIMIT 1
+    `, [studentId]);
+
+    if (rows.length > 0) {
+      return res.json({ meeting: rows[0] });
+    }
+
+    res.json({ meeting: null });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Błąd sprawdzania powiadomień' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/meetings/{id}/dispute:
+ *   post:
+ *     summary: Zgłasza spór dotyczący lekcji przez ucznia (lekcja rzekomo się nie odbyła)
+ *     tags: [Meetings]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID spotkania
+ *     responses:
+ *       200:
+ *         description: Zgłoszono spór
+ *       403:
+ *         description: Brak uprawnień
+ *       500:
+ *         description: Błąd serwera
+ */
+router.post('/:id/dispute', protect, async (req, res) => {
+    const meetingId = req.params.id;
+    const studentId = req.user.user_id;
+    
+    await dbPool.execute(
+        `UPDATE Meetings SET status = 'disputed', is_confirmed_by_student = 0 WHERE meeting_id = ?`,
+        [meetingId]
+    );
+
+    const io = req.app.get('io');
+    if (io) {
+         const [rows] = await dbPool.execute(
+            'SELECT c.teacher_id, m.title FROM Meetings m JOIN Courses c ON m.course_id = c.course_id WHERE m.meeting_id = ?', 
+            [meetingId]
+         );
+         if(rows.length > 0) {
+             io.to(`user_${rows[0].teacher_id}`).emit('notification', {
+                 type: 'error',
+                 title: 'Problem z lekcją',
+                 description: `Uczeń zgłosił, że lekcja "${rows[0].title}" się nie odbyła.`
+             });
+         }
+    }
+
+    res.json({ success: true });
 });
 
 module.exports = router;

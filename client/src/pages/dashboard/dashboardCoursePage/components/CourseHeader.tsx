@@ -6,12 +6,14 @@ import {
   ArrowLeft, 
   Settings, 
   GraduationCap,
-  CalendarDays 
+  CalendarDays,
+  LogOut 
 } from "lucide-react";
 import { CreateLessonDialog } from "@/components/dialogs/CreateLessonDialog";
 import { ScheduleMeetingDialog } from "@/components/dialogs/SheduleMeetingDialog";
 import type { Course } from "@/types/Course";
 import { hexToRgba } from "@/lib/colors";
+import { coursesApi } from "@/api/courses";
 
 interface CourseHeaderProps {
   course: Course;
@@ -25,6 +27,17 @@ export function CourseHeader({ course, isTeacher, onRefresh }: CourseHeaderProps
   const accentColor = course.color_hex || "hsl(var(--primary))";
   
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+
+  const handleLeaveCourse = async () => {
+    if (!confirm(`Czy na pewno chcesz opuścić kurs "${course.title}"?`)) return;
+    try {
+        await coursesApi.leaveCourse(course.course_id);
+        navigate("/dashboard/courses");
+    } catch (error) {
+        console.error(error);
+        alert("Błąd podczas opuszczania kursu.");
+    }
+  };
 
   return (
     <div className="-mx-4 -mt-4 md:-mx-8 md:-mt-8 mb-8 border-b bg-background px-6 py-6">
@@ -40,7 +53,7 @@ export function CourseHeader({ course, isTeacher, onRefresh }: CourseHeaderProps
                 <ArrowLeft className="mr-2 h-4 w-4" /> Wróć do listy
             </Button>
 
-            {isTeacher && (
+            {isTeacher ? (
                 <div className="flex items-center gap-2">
                     <Button 
                         variant="outline" 
@@ -50,6 +63,15 @@ export function CourseHeader({ course, isTeacher, onRefresh }: CourseHeaderProps
                         <Settings className="mr-2 h-4 w-4" /> Ustawienia
                     </Button>
                 </div>
+            ) : (
+                <Button 
+                    variant="ghost" 
+                    size="sm"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={handleLeaveCourse}
+                >
+                    <LogOut className="mr-2 h-4 w-4" /> Opuść kurs
+                </Button>
             )}
         </div>
 
