@@ -8,8 +8,14 @@ export interface Course {
   color_hex?: string;
   student_count: number;
   lesson_count?: number;
+
+  teacher_id: number;
   teacher_name?: string;
   teacher_lastname?: string;
+
+  student_name?: string;
+  student_lastname?: string;
+
   invite_code?: string;
 }
 

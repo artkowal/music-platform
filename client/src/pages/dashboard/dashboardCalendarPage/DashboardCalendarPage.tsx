@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
-import { Calendar, dateFnsLocalizer, Views, type View, type SlotInfo } from "react-big-calendar";
-import { format, parse, startOfWeek, getDay } from "date-fns";
-import { pl } from "date-fns/locale";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Calendar, Views, type View, type SlotInfo, type EventProps } from "react-big-calendar";
+import { startOfDay, endOfDay, areIntervalsOverlapping } from "date-fns";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 
 import { meetingsApi } from "@/api/meetings";
@@ -9,21 +8,18 @@ import { coursesApi } from "@/api/courses";
 import { Button } from "@/components/ui/button";
 import { ScheduleMeetingDialog } from "@/components/dialogs/SheduleMeetingDialog";
 import { MeetingDetailsDialog } from "@/components/dialogs/MeetingDetailsDialog";
+import { TimeOffDialog, type TimeOffData } from "@/components/dialogs/TimeOffDialog";
 import { useAuth } from "@/hooks/useAuth";
 import type { Course } from "@/types/Course";
 import type { Meeting } from "@/types/Meeting";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, CalendarOff } from "lucide-react";
 import { CalendarToolbar } from "./components/CalendarToolbar";
 
-const locales = { 'pl': pl };
-const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });
-
-interface CalendarEvent {
-    title: string;
-    start: Date;
-    end: Date;
-    resource: Meeting;
-}
+import { localizer, messages } from "./config";
+import { getEventStyles, getSlotStyles } from "./utils";
+import type { CalendarEvent, ExtendedMeeting } from "./types";
+import { StandardEvent } from "./components/StandardEvent";
+import { MonthEvent } from "./components/MonthEvent";
 
 export default function DashboardCalendarPage() {
   const { user } = useAuth();
@@ -42,23 +38,48 @@ export default function DashboardCalendarPage() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
 
+  const [isTimeOffOpen, setIsTimeOffOpen] = useState(false);
+  const [selectedTimeOff, setSelectedTimeOff] = useState<TimeOffData | null>(null);
+
+  const parseDateFromDB = (dateStr: string) => {
+      const normalized = dateStr.replace(' ', 'T') + (dateStr.includes('Z') ? '' : 'Z');
+      return new Date(normalized);
+  };
+
   const fetchCalendarData = useCallback(async () => {
     setLoading(true);
     try {
-      const allCourses = await coursesApi.getAll();
-      setCourses(allCourses);
+      if (courses.length === 0) {
+          const allCourses = await coursesApi.getAll();
+          setCourses(allCourses);
+      }
 
       const meetingsData = await meetingsApi.getCalendar(
-          new Date(new Date().getFullYear(), 0, 1).toISOString(), // Od początku roku
-          new Date(new Date().getFullYear(), 11, 31).toISOString() // Do końca roku
+          new Date(new Date().getFullYear(), 0, 1).toISOString(),
+          new Date(new Date().getFullYear(), 11, 31).toISOString()
       ); 
 
-      const mappedEvents: CalendarEvent[] = meetingsData.map(m => ({
-          title: m.title,
-          start: new Date(m.scheduled_time),
-          end: new Date(new Date(m.scheduled_time).getTime() + m.duration_minutes * 60000),
-          resource: m
-      }));
+      const mappedEvents: CalendarEvent[] = (meetingsData as ExtendedMeeting[]).map((m) => {
+          const isTimeOff = m.event_type === 'time_off';
+          
+          let startDate = parseDateFromDB(m.scheduled_time);
+          let endDate = new Date(startDate.getTime() + m.duration_minutes * 60000);
+
+          if (isTimeOff) {
+              if (m.duration_minutes >= 1400) {
+                  startDate = startOfDay(startDate);
+                  endDate = endOfDay(startDate);
+              }
+          }
+
+          return {
+            title: isTimeOff ? (m.title || "Niedostępny") : m.title,
+            start: startDate,
+            end: endDate,
+            resource: m,
+            allDay: isTimeOff ? m.duration_minutes >= 1400 : false 
+          };
+      });
 
       setEvents(mappedEvents);
     } catch (error) {
@@ -66,6 +87,7 @@ export default function DashboardCalendarPage() {
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -73,52 +95,101 @@ export default function DashboardCalendarPage() {
   }, [fetchCalendarData]);
 
   const handleSelectSlot = useCallback((slotInfo: SlotInfo) => {
+      const hasConflict = events.some(ev => {
+          if (ev.resource.event_type !== 'time_off') return false;
+          return areIntervalsOverlapping(
+              { start: slotInfo.start, end: slotInfo.end },
+              { start: ev.start, end: ev.end }
+          );
+      });
+
+      if (hasConflict) {
+          alert("W tym terminie ustalono niedostępność.");
+          return;
+      }
+
       setSelectedSlotDate(slotInfo.start);
       setIsCreateOpen(true);
-  }, []);
+  }, [events]);
 
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
+      const type = event.resource.event_type;
+
+      if (type === 'time_off') {
+          if (isTeacher) {
+              setSelectedTimeOff({
+                  id: event.resource.meeting_id,
+                  start: event.start,
+                  end: event.end,
+                  title: event.title
+              });
+              setIsTimeOffOpen(true);
+          }
+          return;
+      }
+
       setSelectedMeeting(event.resource);
       setIsDetailsOpen(true);
-  }, []);
+  }, [isTeacher]);
 
-  const eventPropGetter = (event: CalendarEvent) => {
-    const meeting = event.resource;
-    const isPast = event.end < new Date();
-    const isCancelled = meeting.status === 'cancelled';
-    const isCompleted = meeting.status === 'completed';
-
-    const baseColor = meeting.workplace_color || '#2563eb';
-    
-    const style: React.CSSProperties = {
-        backgroundColor: baseColor,
-        color: '#fff',
-        borderLeft: '4px solid rgba(0,0,0,0.1)',
-        opacity: 1
-    };
-
-    if (isCancelled) {
-        style.backgroundColor = '#ef4444';
-        style.textDecoration = 'line-through';
-        style.opacity = 0.6;
-    } else if (isCompleted || isPast) {
-        style.backgroundColor = '#94a3b8';
-        style.opacity = 0.8;
-    }
-
-    return { style };
+  const handleCreateTimeOff = () => {
+      setSelectedTimeOff(null);
+      setIsTimeOffOpen(true);
   };
+
+  const handleGoToDay = (day: Date) => {
+      setDate(day);
+      setView(Views.DAY);
+  };
+
+  const components = useMemo(() => ({
+    event: (props: EventProps<CalendarEvent>) => {
+        if (view === Views.MONTH) {
+            return (
+                <MonthEvent 
+                    event={props.event} 
+                    events={events}
+                    isTeacher={isTeacher}
+                    onSelectEvent={handleSelectEvent}
+                    onGoToDay={handleGoToDay}
+                />
+            );
+        }
+        return <StandardEvent event={props.event} isTeacher={isTeacher} />;
+    }
+  }), [view, events, isTeacher, handleSelectEvent]);
 
   return (
     <div className="space-y-4 animate-in fade-in">
+      
+      {/* CSS do ukrycia domyślnego linku "+X more" */}
+      <style>{`
+         .rbc-month-view .rbc-show-more { display: none !important; }
+      `}</style>
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
             <h2 className="text-3xl font-bold tracking-tight">Kalendarz zajęć</h2>
-            <p className="text-muted-foreground">Zarządzaj grafikiem i spotkaniami.</p>
+            <p className="text-muted-foreground">
+                Zarządzaj swoim grafikiem.
+            </p>
         </div>
-        <Button onClick={() => { setSelectedSlotDate(null); setIsCreateOpen(true); }} className="shadow-lg shadow-primary/20">
-            <Plus className="mr-2 h-4 w-4" /> Umów nowe spotkanie
-        </Button>
+        
+        <div className="flex items-center gap-3">
+            {isTeacher && (
+                <Button 
+                    variant="ghost" 
+                    onClick={handleCreateTimeOff}
+                    className="text-muted-foreground hover:text-orange-600 hover:bg-orange-50 gap-2 transition-colors"
+                >
+                    <CalendarOff className="h-4 w-4" /> 
+                    <span>Dzień wolny</span>
+                </Button>
+            )}
+            <Button onClick={() => { setSelectedSlotDate(null); setIsCreateOpen(true); }} className="shadow-md">
+                <Plus className="mr-2 h-4 w-4" /> Umów nowe spotkanie
+            </Button>
+        </div>
       </div>
 
       <CalendarToolbar 
@@ -127,7 +198,7 @@ export default function DashboardCalendarPage() {
         onNavigate={(action) => {
             const newDate = new Date(date);
             if (action === 'TODAY') setDate(new Date());
-            else if (action === 'PREV') setDate(new Date(newDate.setDate(newDate.getDate() - 7))); // Uproszczone
+            else if (action === 'PREV') setDate(new Date(newDate.setDate(newDate.getDate() - 7))); 
             else setDate(new Date(newDate.setDate(newDate.getDate() + 7)));
         }} 
         onViewChange={(v) => setView(v as View)} 
@@ -150,14 +221,24 @@ export default function DashboardCalendarPage() {
             step={60}
             timeslots={1}
             min={new Date(0, 0, 0, 7, 0, 0)}
-            max={new Date(0, 0, 0, 22, 0, 0)}
+            
             selectable={true}
             onSelectSlot={handleSelectSlot}
             onSelectEvent={handleSelectEvent}
-            eventPropGetter={eventPropGetter}
+            
+            eventPropGetter={(e) => getEventStyles(e, view, events, isTeacher)}
+            slotPropGetter={(d) => getSlotStyles(d, events)}
+            
+            components={components}
             toolbar={false}
             culture="pl"
-            messages={{ next: "Dalej", previous: "Wstecz", today: "Dziś", month: "Miesiąc", week: "Tydzień", day: "Dzień" }}
+            messages={messages}
+            formats={{
+                eventTimeRangeFormat: ({ start, end }, culture) =>
+                    `${localizer.format(start, 'HH:mm', culture)} - ${localizer.format(end, 'HH:mm', culture)}`,
+                agendaDateFormat: 'd MMMM yyyy (EEEE)', 
+                dayHeaderFormat: 'd MMMM yyyy (EEEE)'
+            }}
         />
       </div>
 
@@ -175,6 +256,13 @@ export default function DashboardCalendarPage() {
         meeting={selectedMeeting}
         isTeacher={isTeacher}
         onRefresh={fetchCalendarData}
+      />
+
+      <TimeOffDialog 
+        isOpen={isTimeOffOpen}
+        onClose={() => setIsTimeOffOpen(false)}
+        onSuccess={fetchCalendarData}
+        initialData={selectedTimeOff}
       />
     </div>
   );

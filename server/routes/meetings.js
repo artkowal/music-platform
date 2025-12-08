@@ -52,55 +52,71 @@ router.get('/calendar', protect, async (req, res) => {
   const userId = req.user.user_id;
   const role = req.user.role;
 
-  const startDate =
-    start ||
-    formatToMySQLDateTime(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
-  const endDate =
-    end ||
-    formatToMySQLDateTime(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+  const startDate = start || formatToMySQLDateTime(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+  const endDate = end || formatToMySQLDateTime(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
 
   try {
     await autoCompleteStationaryLessons(dbPool);
-  } catch (e) {
-    console.error('Auto-complete error:', e.message);
-  }
 
-  let query = '';
-  let params = [userId, startDate, endDate];
+    let meetingQuery = '';
+    let params = [userId, startDate, endDate];
+    let combinedData = [];
 
-  if (role === 'teacher') {
-    query = `
-      SELECT m.*, c.title AS course_title, c.workplace_id, w.name AS workplace_name, w.color_hex AS workplace_color,
-      (
-        SELECT GROUP_CONCAT(CONCAT(u.first_name, ' ', u.last_name) SEPARATOR ', ')
-        FROM Enrollments e
-        JOIN Users u ON e.student_id = u.user_id
-        WHERE e.course_id = c.course_id
-      ) AS student_names
-      FROM Meetings m
-      JOIN Courses c ON m.course_id = c.course_id
-      LEFT JOIN Workplaces w ON c.workplace_id = w.workplace_id
-      WHERE c.teacher_id = ?
-      AND m.scheduled_time BETWEEN ? AND ?
-    `;
-  } else {
-    query = `
-      SELECT m.*, c.title AS course_title, c.workplace_id, w.name AS workplace_name, w.color_hex AS workplace_color,
-             u.first_name AS teacher_name, u.last_name AS teacher_lastname
-      FROM Meetings m
-      JOIN Courses c ON m.course_id = c.course_id
-      JOIN Enrollments e ON c.course_id = e.course_id
-      LEFT JOIN Workplaces w ON c.workplace_id = w.workplace_id
-      JOIN Users u ON c.teacher_id = u.user_id
-      WHERE e.student_id = ?
-      AND m.scheduled_time BETWEEN ? AND ?
-    `;
-  }
+    // 1. Pobieranie LEKCJI (Wspólne dla obu ról, różni się tylko warunek WHERE)
+    if (role === 'teacher') {
+      meetingQuery = `
+        SELECT m.meeting_id, m.course_id, m.title, m.description, m.scheduled_time, m.duration_minutes, 
+               m.type, m.status, m.started_at, m.is_confirmed_by_teacher, m.is_confirmed_by_student,
+               c.title AS course_title, c.workplace_id, w.name AS workplace_name, w.color_hex AS workplace_color,
+               'lesson' as event_type
+        FROM Meetings m
+        JOIN Courses c ON m.course_id = c.course_id
+        LEFT JOIN Workplaces w ON c.workplace_id = w.workplace_id
+        WHERE c.teacher_id = ?
+        AND m.scheduled_time BETWEEN ? AND ?
+      `;
+    } else {
+      meetingQuery = `
+        SELECT m.meeting_id, m.course_id, m.title, m.description, m.scheduled_time, m.duration_minutes, 
+               m.type, m.status, m.started_at, m.is_confirmed_by_teacher, m.is_confirmed_by_student,
+               c.title AS course_title, c.workplace_id, w.name AS workplace_name, w.color_hex AS workplace_color,
+               u.first_name AS teacher_name, u.last_name AS teacher_lastname,
+               'lesson' as event_type
+        FROM Meetings m
+        JOIN Courses c ON m.course_id = c.course_id
+        JOIN Enrollments e ON c.course_id = e.course_id
+        LEFT JOIN Workplaces w ON c.workplace_id = w.workplace_id
+        JOIN Users u ON c.teacher_id = u.user_id
+        WHERE e.student_id = ?
+        AND m.scheduled_time BETWEEN ? AND ?
+      `;
+    }
 
-  try {
-    const [rows] = await dbPool.execute(query, params);
-    res.json({ success: true, data: rows });
+    const [meetings] = await dbPool.execute(meetingQuery, params);
+    combinedData = [...meetings];
+
+    // 2. Pobieranie DNI WOLNYCH (Tylko dla nauczyciela - uczeń nie musi widzieć wolnego nauczyciela w SWOIM kalendarzu, widzi to przy umawianiu)
+    if (role === 'teacher') {
+        const timeOffQuery = `
+            SELECT availability_id as meeting_id, 
+                   note as title, 
+                   start_time as scheduled_time, 
+                   TIMESTAMPDIFF(MINUTE, start_time, end_time) as duration_minutes, 
+                   'stationary' as type, 
+                   'completed' as status, 
+                   '#ef4444' as workplace_color, 
+                   'time_off' as event_type
+            FROM TeacherAvailability 
+            WHERE teacher_id = ? AND start_time BETWEEN ? AND ?
+        `;
+        const [timeOffs] = await dbPool.execute(timeOffQuery, [userId, startDate, endDate]);
+        combinedData = [...combinedData, ...timeOffs];
+    }
+    
+    res.json({ success: true, data: combinedData });
+
   } catch (error) {
+    console.error("Błąd kalendarza:", error);
     res.status(500).json({ message: 'Błąd pobierania danych kalendarza.' });
   }
 });
@@ -684,37 +700,106 @@ router.get('/:id/zoom-report', protect, async (req, res) => {
 router.get('/availability', protect, async (req, res) => {
   const { course_id, date } = req.query;
 
-  if (!course_id || !date)
-    return res.status(400).json({ message: 'Brak parametrów.' });
+  if (!date) return res.status(400).json({ message: 'Brak daty.' });
+
+  const userId = req.user.user_id;
+  const role = req.user.role;
+  
+  const startDay = `${date} 00:00:00`;
+  const endDay = `${date} 23:59:59`;
 
   try {
-    const [course] = await dbPool.execute(
-      `SELECT teacher_id FROM Courses WHERE course_id = ?`,
-      [course_id]
-    );
-    if (course.length === 0) return res.json({ busySlots: [] });
+    let teacherId = null;
+    let studentIds = [];
 
-    const teacherId = course[0].teacher_id;
+    // Logika określania kogo sprawdzamy
+    if (role === 'teacher') {
+        teacherId = userId;
+      
+        if (course_id) {
+            const [enrollments] = await dbPool.execute(
+                'SELECT student_id FROM Enrollments WHERE course_id = ?', 
+                [course_id]
+            );
+            studentIds = enrollments.map(e => e.student_id);
+        }
+    } else {
+        studentIds = [userId];
+        
+        // Musi wybrać kurs, żebyśmy wiedzieli o jakiego nauczyciela chodzi
+        if (course_id) {
+            const [courses] = await dbPool.execute(
+                'SELECT teacher_id FROM Courses WHERE course_id = ?',
+                [course_id]
+            );
+            if (courses.length > 0) teacherId = courses[0].teacher_id;
+        }
+    }
 
-    const [meetings] = await dbPool.execute(
-      `
-      SELECT m.scheduled_time, m.duration_minutes
-      FROM Meetings m
-      JOIN Courses c ON m.course_id = c.course_id
-      WHERE c.teacher_id = ?
-        AND m.status != 'cancelled'
-        AND m.scheduled_time BETWEEN ? AND ?
-    `,
-      [`${teacherId}`, `${date} 00:00:00`, `${date} 23:59:59`]
-    );
+    let busySlots = [];
 
-    const busySlots = meetings.map((m) => ({
-      start: m.scheduled_time,
-      duration: m.duration_minutes,
-    }));
+    // ZAJĘTE PRZEZ NAUCZYCIELA (Lekcje + Wolne)
+    if (teacherId) {
+        const [teacherMeetings] = await dbPool.execute(
+          `SELECT m.scheduled_time, m.duration_minutes 
+           FROM Meetings m 
+           JOIN Courses c ON m.course_id = c.course_id
+           WHERE c.teacher_id = ? 
+           AND m.status != 'cancelled' 
+           AND m.scheduled_time BETWEEN ? AND ?`,
+          [teacherId, startDay, endDay]
+        );
+
+        teacherMeetings.forEach(m => busySlots.push({
+            start: m.scheduled_time,
+            duration: m.duration_minutes
+        }));
+
+        const [timeOffs] = await dbPool.execute(
+            `SELECT start_time, end_time FROM TeacherAvailability
+             WHERE teacher_id = ? 
+             AND (
+                (start_time <= ? AND end_time >= ?) OR 
+                (start_time BETWEEN ? AND ?) OR 
+                (end_time BETWEEN ? AND ?)
+             )`,
+            [teacherId, endDay, startDay, startDay, endDay, startDay, endDay]
+        );
+
+        timeOffs.forEach(off => {
+            const start = new Date(off.start_time);
+            const end = new Date(off.end_time);
+            const duration = (end - start) / 60000;
+            busySlots.push({
+                start: off.start_time,
+                duration: duration > 0 ? duration : 1440
+            });
+        });
+    }
+
+    // ZAJĘTE PRZEZ UCZNIÓW (Konflikty w innych kursach)
+    if (studentIds.length > 0) {
+        const placeholders = studentIds.map(() => '?').join(',');
+        
+        const [studentMeetings] = await dbPool.execute(
+            `SELECT m.scheduled_time, m.duration_minutes
+             FROM Meetings m
+             JOIN Enrollments e ON m.course_id = e.course_id
+             WHERE e.student_id IN (${placeholders})
+             AND m.status != 'cancelled'
+             AND m.scheduled_time BETWEEN ? AND ?`,
+            [...studentIds, startDay, endDay]
+        );
+
+        studentMeetings.forEach(m => busySlots.push({
+            start: m.scheduled_time,
+            duration: m.duration_minutes
+        }));
+    }
 
     res.json({ success: true, busySlots });
   } catch (error) {
+    console.error("Availability Error:", error);
     res.status(500).json({ message: 'Błąd' });
   }
 });
@@ -813,6 +898,250 @@ router.post('/:id/dispute', protect, async (req, res) => {
     }
 
     res.json({ success: true });
+});
+
+/**
+ * @swagger
+ * /api/meetings/time-off:
+ *   post:
+ *     summary: Dodaje nową niedostępność nauczyciela
+ *     description: |
+ *       Tworzy wpis o niedostępności nauczyciela (dzień wolny lub zakres godzin).
+ *       Dostępne tylko dla użytkowników z rolą **teacher**.
+ *     tags: [Meetings]
+ *     security:
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - start_time
+ *               - end_time
+ *             properties:
+ *               start_time:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Początek okresu niedostępności
+ *                 example: "2025-01-10T09:00:00Z"
+ *               end_time:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Koniec okresu niedostępności (musi być po start_time)
+ *                 example: "2025-01-10T16:00:00Z"
+ *               note:
+ *                 type: string
+ *                 description: Opcjonalna notatka dotycząca powodu niedostępności
+ *                 example: "Szkolenie"
+ *     responses:
+ *       200:
+ *         description: Pomyślnie dodano niedostępność nauczyciela
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *       400:
+ *         description: Walidacja nie powiodła się — start_time jest później niż end_time
+ *         content:
+ *           application/json:
+ *             example:
+ *               message: "Data końcowa musi być po dacie początkowej"
+ *       403:
+ *         description: Brak uprawnień — endpoint tylko dla nauczycieli
+ *         content:
+ *           application/json:
+ *             example:
+ *               message: "Brak uprawnień"
+ *       500:
+ *         description: Nieoczekiwany błąd serwera
+ *         content:
+ *           application/json:
+ *             example:
+ *               message: "Błąd zapisu"
+ */
+router.post('/time-off', protect, async (req, res) => {
+    if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Brak uprawnień' });
+
+    const { start_time, end_time, note } = req.body;
+    const teacherId = req.user.user_id;
+
+    // Prosta walidacja
+    if (new Date(start_time) >= new Date(end_time)) {
+        return res.status(400).json({ message: 'Data końcowa musi być po dacie początkowej' });
+    }
+
+    const startFormatted = formatToMySQLDateTime(new Date(start_time));
+    const endFormatted = formatToMySQLDateTime(new Date(end_time));
+
+    try {
+        await dbPool.execute(
+            `INSERT INTO TeacherAvailability (teacher_id, start_time, end_time, note) VALUES (?, ?, ?, ?)`,
+            [teacherId, startFormatted, endFormatted, note || 'Niedostępny']
+        );
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Błąd zapisu TimeOff:", error);
+        res.status(500).json({ message: 'Błąd zapisu' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/meetings/time-off/{id}:
+ *   delete:
+ *     summary: Usuwa wpis niedostępności nauczyciela
+ *     description: |
+ *       Usuwa istniejący wpis `TeacherAvailability`.  
+ *       Endpoint dostępny wyłącznie dla użytkowników z rolą **teacher**.
+ *     tags: [Meetings]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID wpisu niedostępności nauczyciela
+ *         example: 42
+ *     responses:
+ *       200:
+ *         description: Wpis niedostępności został pomyślnie usunięty
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: "Usunięto dzień wolny."
+ *       403:
+ *         description: Brak uprawnień — endpoint tylko dla nauczycieli
+ *         content:
+ *           application/json:
+ *             example:
+ *               message: "Brak uprawnień"
+ *       404:
+ *         description: Nie znaleziono wpisu lub nauczyciel nie jest jego właścicielem
+ *         content:
+ *           application/json:
+ *             example:
+ *               message: "Nie znaleziono wpisu lub brak uprawnień."
+ */
+router.delete('/time-off/:id', protect, async (req, res) => {
+    if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Brak uprawnień' });
+    
+    const { id } = req.params;
+    
+    const [result] = await dbPool.execute(
+        'DELETE FROM TeacherAvailability WHERE availability_id = ? AND teacher_id = ?', 
+        [id, req.user.user_id]
+    );
+
+    if (result.affectedRows === 0) {
+        return res.status(404).json({ message: 'Nie znaleziono wpisu lub brak uprawnień.' });
+    }
+
+    res.json({ success: true, message: 'Usunięto dzień wolny.' });
+});
+
+/**
+ * @swagger
+ * /api/meetings/time-off/{id}:
+ *   put:
+ *     summary: Aktualizuje wpis o niedostępności nauczyciela
+ *     description: |
+ *       Endpoint pozwala nauczycielowi edytować istniejący wpis o niedostępności.
+ *       Wpis można edytować tylko jeśli należy do zalogowanego nauczyciela.
+ *     tags: [Meetings]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: ID wpisu niedostępności (availability_id)
+ *         schema:
+ *           type: integer
+ *           example: 12
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - start_time
+ *               - end_time
+ *             properties:
+ *               start_time:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Początek okresu niedostępności
+ *                 example: "2025-01-12T14:00:00Z"
+ *               end_time:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Koniec okresu niedostępności (musi być po start_time)
+ *                 example: "2025-01-12T18:00:00Z"
+ *               note:
+ *                 type: string
+ *                 description: Opcjonalna notatka dotycząca niedostępności
+ *                 example: "Wyjazd prywatny"
+ *     responses:
+ *       200:
+ *         description: Pomyślnie zaktualizowano wpis niedostępności
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: "Zaktualizowano dzień wolny."
+ *       400:
+ *         description: Niepoprawne dane wejściowe (np. koniec przed początkiem)
+ *         content:
+ *           application/json:
+ *             example:
+ *               message: "Data końcowa musi być po dacie początkowej"
+ *       403:
+ *         description: Brak uprawnień — tylko nauczyciel może edytować niedostępności
+ *         content:
+ *           application/json:
+ *             example:
+ *               message: "Brak uprawnień"
+ *       404:
+ *         description: Wpis nie istnieje lub nauczyciel nie jest jego właścicielem
+ *         content:
+ *           application/json:
+ *             example:
+ *               message: "Nie znaleziono wpisu lub brak uprawnień."
+ *       500:
+ *         description: Błąd serwera
+ */
+
+router.put('/time-off/:id', protect, async (req, res) => {
+    if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Brak uprawnień' });
+    
+    const { id } = req.params;
+    const { start_time, end_time, note } = req.body;
+
+    if (new Date(start_time) >= new Date(end_time)) {
+        return res.status(400).json({ message: 'Data końcowa musi być po dacie początkowej' });
+    }
+
+    const startFormatted = formatToMySQLDateTime(new Date(start_time));
+    const endFormatted = formatToMySQLDateTime(new Date(end_time));
+
+    const [result] = await dbPool.execute(
+        `UPDATE TeacherAvailability 
+         SET start_time = ?, end_time = ?, note = ? 
+         WHERE availability_id = ? AND teacher_id = ?`,
+        [startFormatted, endFormatted, note || 'Niedostępny', id, req.user.user_id]
+    );
+
+    if (result.affectedRows === 0) {
+        return res.status(404).json({ message: 'Nie znaleziono wpisu lub brak uprawnień.' });
+    }
+
+    res.json({ success: true, message: 'Zaktualizowano dzień wolny.' });
 });
 
 module.exports = router;
