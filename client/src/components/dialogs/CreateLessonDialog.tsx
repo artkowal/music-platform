@@ -5,10 +5,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { lessonsApi } from "@/api/Lesson";
 import { Plus, Upload, X, Eye, EyeOff } from "lucide-react";
+import { RichTextEditor } from "@/components/RichTextEditor";
 
 interface Props {
   courseId: number;
@@ -102,12 +102,12 @@ export function CreateLessonDialog({ courseId, children, onSuccess }: Props) {
 
           <div className="grid gap-2">
             <Label htmlFor="desc">Opis / Zadania</Label>
-            <Textarea
-              id="desc"
-              className="min-h-[100px]"
-              placeholder="Opisz co będzie na lekcji lub co jest zadane..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+            
+            {/* Nowy Edytor */}
+            <RichTextEditor 
+                value={description}
+                onChange={setDescription}
+                height={200}
             />
           </div>
 

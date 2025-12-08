@@ -7,7 +7,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSocket } from "@/context/SocketContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +15,8 @@ import type { Lesson } from "@/types/Lesson";
 import type { Course } from "@/types/Course";
 import type { Student } from "@/types/Student";
 import type { Comment } from "@/types/Comment";
+import DOMPurify from "dompurify"; 
+import { RichTextEditor } from "@/components/RichTextEditor";
 
 import { LessonHeader } from "./components/LessonHeader";
 import { LessonMaterials } from "./components/LessonMaterials";
@@ -203,7 +204,8 @@ export default function DashboardLessonPage() {
         )}
       </div>
 
-      <div className="flex-1 w-full max-w-5xl mx-auto p-6 md:p-10 pb-24">
+      {/* DODANO min-w-0 ABY ZAPOBIEC WYPYCHANIU PRZEZ DŁUGIE CIĄGI ZNAKÓW */}
+      <div className="flex-1 w-full max-w-5xl mx-auto p-6 md:p-10 pb-24 min-w-0">
         
         {isEditing ? (
             <div className="grid gap-6 animate-in zoom-in-95 duration-300">
@@ -240,10 +242,10 @@ export default function DashboardLessonPage() {
 
                 <Card className="p-6 grid gap-2">
                     <Label>Treść / Opis</Label>
-                    <Textarea 
+                    <RichTextEditor 
                         value={editData.description}
-                        onChange={e => setEditData(prev => prev ? ({...prev, description: e.target.value}) : null)}
-                        className="min-h-[300px] font-mono text-sm leading-relaxed"
+                        onChange={(val) => setEditData(prev => prev ? ({...prev, description: val}) : null)}
+                        height={400}
                     />
                 </Card>
 
@@ -281,9 +283,18 @@ export default function DashboardLessonPage() {
                         <EyeOff className="h-4 w-4" /> Ta lekcja jest ukryta dla uczniów.
                     </div>
                 )}
-
-                <div className="prose dark:prose-invert max-w-none whitespace-pre-wrap text-muted-foreground leading-relaxed bg-card p-8 rounded-xl border shadow-sm">
-                    {lesson.description || "Brak opisu dla tej lekcji."}
+                
+                <div className="bg-card p-8 rounded-xl border shadow-sm w-full overflow-hidden">
+                    {lesson.description ? (
+                         <div 
+                            className="prose dark:prose-invert max-w-none leading-relaxed break-words [word-break:break-word] w-full"
+                            dangerouslySetInnerHTML={{ 
+                                __html: DOMPurify.sanitize(lesson.description) 
+                            }} 
+                         />
+                    ) : (
+                        <p className="text-muted-foreground italic">Brak opisu dla tej lekcji.</p>
+                    )}
                 </div>
 
                 <LessonMaterials materials={lesson.materials || []} />
