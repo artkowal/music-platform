@@ -6,6 +6,7 @@ const mysql = require('mysql2/promise');
 const { protect } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
+const { sendNotification } = require('../utils/notifications');
 const dbPool = mysql.createPool(process.env.DATABASE_URL);
 
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
@@ -207,15 +208,14 @@ router.post('/', protect, upload.array('files'), async (req, res) => {
     const [students] = await dbPool.execute('SELECT student_id FROM Enrollments WHERE course_id = ?', [course_id]);
 
     const io = req.app.get('io');
-    if (io && students.length > 0) {
-      students.forEach(s => {
-        io.to(`user_${s.student_id}`).emit('notification', {
-          type: 'info',
-          title: 'Nowa lekcja!',
-          description: `Dodano nową lekcję "${title}" w kursie "${courseTitle}".`,
-          link: `/dashboard/courses/${course_id}/lessons/${lessonId}`
+    
+    for (const s of students) {
+        await sendNotification(dbPool, io, s.student_id, {
+            type: 'info',
+            title: 'Nowa lekcja!',
+            description: `Dodano nową lekcję "${title}" w kursie "${courseTitle}".`,
+            link: `/dashboard/courses/${course_id}/lessons/${lessonId}`
         });
-      });
     }
 
     res.status(201).json({ success: true, message: 'Lekcja utworzona' });
@@ -507,17 +507,16 @@ router.post('/:id/progress', protect, async (req, res) => {
         [lessonId]
       );
         
-      if (lessonData.length > 0) {
+    if (lessonData.length > 0) {
         const { title, teacher_id, course_id } = lessonData[0];
         const io = req.app.get('io');
-        if (io) {
-          io.to(`user_${teacher_id}`).emit('notification', {
+        
+        await sendNotification(dbPool, io, teacher_id, {
             type: 'success',
             title: 'Lekcja ukończona',
             description: `Uczeń ${req.user.first_name} ${req.user.last_name} ukończył lekcję "${title}".`,
             link: `/dashboard/courses/${course_id}/lessons/${lessonId}`
-          });
-        }
+        });
       }
     }
 

@@ -1,6 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useSocket } from "@/context/SocketContext";
+import { notificationsApi } from "@/api/notifications";
+import { useAuth } from "@/hooks/useAuth";
 
 export interface NotificationItem {
   id: string;
@@ -8,15 +10,8 @@ export interface NotificationItem {
   description: string;
   link?: string;
   type: 'info' | 'success' | 'warning' | 'error' | 'message';
-  timestamp: Date;
+  timestamp: string | Date;
   read: boolean;
-}
-
-interface SocketNotificationPayload {
-  title: string;
-  description: string;
-  link?: string;
-  type?: 'info' | 'success' | 'warning' | 'error' | 'message';
 }
 
 interface NotificationContextType {
@@ -26,6 +21,7 @@ interface NotificationContextType {
   markAllAsRead: () => void;
   latestNotification: NotificationItem | null;
   clearLatest: () => void;
+  isLoading: boolean;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -37,9 +33,27 @@ export const useNotifications = () => {
 };
 
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
+  const { user } = useAuth();
   const { socket } = useSocket();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [latestNotification, setLatestNotification] = useState<NotificationItem | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // 1. Pobierz historię z bazy po zalogowaniu
+  useEffect(() => {
+    if (user) {
+      setIsLoading(true);
+      notificationsApi.getAll()
+        .then(data => {
+            const parsed = data.map(n => ({ ...n, timestamp: new Date(n.timestamp) }));
+            setNotifications(parsed);
+        })
+        .catch(err => console.error("Błąd pobierania powiadomień", err))
+        .finally(() => setIsLoading(false));
+    } else {
+        setNotifications([]);
+    }
+  }, [user]);
 
   const playSound = () => {
     try {
@@ -49,22 +63,15 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     } catch(e) { console.error(e); }
   };
 
+  // 2. Obsługa nowych powiadomień w czasie rzeczywistym
   useEffect(() => {
     if (!socket) return;
 
-    const handleNotification = (data: SocketNotificationPayload) => {
+    const handleNotification = (newItem: NotificationItem) => {
       playSound();
       
-      const newItem: NotificationItem = {
-        id: Math.random().toString(36).substring(2, 9),
-        title: data.title,
-        description: data.description,
-        link: data.link,
-        type: data.type || 'info',
-        timestamp: new Date(),
-        read: false
-      };
-
+      newItem.timestamp = new Date(); 
+      
       setNotifications(prev => [newItem, ...prev]);
       setLatestNotification(newItem);
 
@@ -80,12 +87,18 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [socket]);
 
-  const markAsRead = (id: string) => {
+  const markAsRead = async (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    try {
+        await notificationsApi.markAsRead(id);
+    } catch(e) { console.error(e); }
   };
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    try {
+        await notificationsApi.markAllAsRead();
+    } catch(e) { console.error(e); }
   };
 
   const clearLatest = () => setLatestNotification(null);
@@ -93,7 +106,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, markAsRead, markAllAsRead, latestNotification, clearLatest }}>
+    <NotificationContext.Provider value={{ notifications, unreadCount, markAsRead, markAllAsRead, latestNotification, clearLatest, isLoading }}>
       {children}
     </NotificationContext.Provider>
   );

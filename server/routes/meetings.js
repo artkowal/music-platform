@@ -4,6 +4,7 @@ const { protect } = require('../middlewares/auth.middleware');
 const { createMeeting, getMeetingReport } = require('../services/zoom');
 
 const router = express.Router();
+const { sendNotification } = require('../utils/notifications');
 const dbPool = mysql.createPool(process.env.DATABASE_URL);
 
 const formatToMySQLDateTime = (dateObj) =>
@@ -284,27 +285,25 @@ router.post('/schedule', protect, async (req, res) => {
     await connection.commit();
 
     const io = req.app.get('io');
-    if (io) {
-        if (req.user.role === 'teacher') {
-            // Nauczyciel zaplanował -> wyślij do uczniów
-            const [students] = await dbPool.execute('SELECT student_id FROM Enrollments WHERE course_id = ?', [course_id]);
-            students.forEach(s => {
-                io.to(`user_${s.student_id}`).emit('notification', {
-                    type: 'info',
-                    title: 'Nowe spotkanie',
-                    description: `Nauczyciel zaplanował spotkanie: "${title}"`,
-                    link: `/dashboard/calendar`
-                });
-            });
-        } else {
-            // Uczeń zaplanował -> wyślij do nauczyciela
-            io.to(`user_${teacherId}`).emit('notification', {
+    
+    if (req.user.role === 'teacher') {
+        const [students] = await dbPool.execute('SELECT student_id FROM Enrollments WHERE course_id = ?', [course_id]);
+        
+        for (const s of students) {
+            await sendNotification(dbPool, io, s.student_id, {
                 type: 'info',
                 title: 'Nowe spotkanie',
-                description: `Uczeń zaplanował spotkanie: "${title}"`,
+                description: `Nauczyciel zaplanował spotkanie: "${title}"`,
                 link: `/dashboard/calendar`
             });
         }
+    } else {
+        await sendNotification(dbPool, io, teacherId, {
+            type: 'info',
+            title: 'Nowe spotkanie',
+            description: `Uczeń zaplanował spotkanie: "${title}"`,
+            link: `/dashboard/calendar`
+        });
     }
 
     res.status(201).json({ success: true, message: 'Zaplanowano spotkania.' });
@@ -392,14 +391,13 @@ router.patch('/:id/start-early', protect, async (req, res) => {
       const [students] = await dbPool.execute('SELECT student_id FROM Enrollments WHERE course_id = ?', [course_id]);
       
       const io = req.app.get('io');
-      if (io && students.length > 0) {
-          students.forEach(s => {
-            io.to(`user_${s.student_id}`).emit('notification', {
-                type: 'success',
-                title: 'Lekcja rozpoczęta!',
-                description: `Nauczyciel rozpoczął lekcję: "${title}". Dołącz teraz!`,
-                link: `/dashboard/courses/${course_id}`
-            });
+
+      for (const s of students) {
+          await sendNotification(dbPool, io, s.student_id, {
+              type: 'success',
+              title: 'Lekcja rozpoczęta!',
+              description: `Nauczyciel rozpoczął lekcję: "${title}". Dołącz teraz!`,
+              link: `/dashboard/courses/${course_id}`
           });
       }
   }
@@ -505,51 +503,44 @@ router.patch('/:id/confirm', protect, async (req, res) => {
  */
 router.patch('/:id/cancel', protect, async (req, res) => {
   const role = req.user.role;
-  const userId = req.user.user_id;
   const meetingId = req.params.id;
 
   await dbPool.execute(
-    `
-    UPDATE Meetings 
-    SET status = "cancelled", cancelled_by = ?
-    WHERE meeting_id = ?
-  `,
+    `UPDATE Meetings 
+     SET status = "cancelled", cancelled_by = ?
+     WHERE meeting_id = ?`,
     [role, meetingId]
   );
 
-  // --- POWIADOMIENIE O ODWOŁANIU ---
   const io = req.app.get('io');
-  if (io) {
-      // Pobierz dane spotkania
-      const [meeting] = await dbPool.execute(
-          `SELECT m.title, c.teacher_id, m.course_id 
-           FROM Meetings m 
-           JOIN Courses c ON m.course_id = c.course_id 
-           WHERE m.meeting_id = ?`, 
-           [meetingId]
-      );
+  
+  const [meeting] = await dbPool.execute(
+      `SELECT m.title, c.teacher_id, m.course_id 
+       FROM Meetings m 
+       JOIN Courses c ON m.course_id = c.course_id 
+       WHERE m.meeting_id = ?`, 
+       [meetingId]
+  );
 
-      if (meeting.length > 0) {
-          const { title, teacher_id, course_id } = meeting[0];
+  if (meeting.length > 0) {
+      const { title, teacher_id, course_id } = meeting[0];
 
-          if (role === 'teacher') {
-              // Nauczyciel odwołał -> powiadom wszystkich uczniów
-              const [students] = await dbPool.execute('SELECT student_id FROM Enrollments WHERE course_id = ?', [course_id]);
-              students.forEach(s => {
-                  io.to(`user_${s.student_id}`).emit('notification', {
-                      type: 'warning',
-                      title: 'Zajęcia odwołane',
-                      description: `Nauczyciel odwołał spotkanie: "${title}"`
-                  });
-              });
-          } else {
-              // Uczeń odwołał -> powiadom nauczyciela
-              io.to(`user_${teacher_id}`).emit('notification', {
+      if (role === 'teacher') {
+          const [students] = await dbPool.execute('SELECT student_id FROM Enrollments WHERE course_id = ?', [course_id]);
+          
+          for (const s of students) {
+              await sendNotification(dbPool, io, s.student_id, {
                   type: 'warning',
                   title: 'Zajęcia odwołane',
-                  description: `Uczeń ${req.user.first_name} ${req.user.last_name} odwołał spotkanie: "${title}"`
+                  description: `Nauczyciel odwołał spotkanie: "${title}"`
               });
           }
+      } else {
+          await sendNotification(dbPool, io, teacher_id, {
+              type: 'warning',
+              title: 'Zajęcia odwołane',
+              description: `Uczeń ${req.user.first_name} ${req.user.last_name} odwołał spotkanie: "${title}"`
+          });
       }
   }
 
@@ -883,18 +874,18 @@ router.post('/:id/dispute', protect, async (req, res) => {
     );
 
     const io = req.app.get('io');
-    if (io) {
-         const [rows] = await dbPool.execute(
-            'SELECT c.teacher_id, m.title FROM Meetings m JOIN Courses c ON m.course_id = c.course_id WHERE m.meeting_id = ?', 
-            [meetingId]
-         );
-         if(rows.length > 0) {
-             io.to(`user_${rows[0].teacher_id}`).emit('notification', {
-                 type: 'error',
-                 title: 'Problem z lekcją',
-                 description: `Uczeń zgłosił, że lekcja "${rows[0].title}" się nie odbyła.`
-             });
-         }
+    
+    const [rows] = await dbPool.execute(
+       'SELECT c.teacher_id, m.title FROM Meetings m JOIN Courses c ON m.course_id = c.course_id WHERE m.meeting_id = ?', 
+       [meetingId]
+    );
+    
+    if(rows.length > 0) {
+        await sendNotification(dbPool, io, rows[0].teacher_id, {
+            type: 'error',
+            title: 'Problem z lekcją',
+            description: `Uczeń zgłosił, że lekcja "${rows[0].title}" się nie odbyła.`
+        });
     }
 
     res.json({ success: true });

@@ -3,6 +3,7 @@ const mysql = require('mysql2/promise');
 const { protect } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
+const { sendNotification } = require('../utils/notifications');
 const dbPool = mysql.createPool(process.env.DATABASE_URL);
 
 /**
@@ -142,14 +143,13 @@ router.post('/', protect, async (req, res) => {
           );
 
           const io = req.app.get('io');
-          if (io) {
-            io.to(`user_${student.user_id}`).emit('notification', {
-              type: 'info',
-              title: 'Zostałeś dodany do kursu!',
-              description: `Nauczyciel dodał Cię do nowego kursu: "${title}"`,
-              link: `/dashboard/courses/${courseId}`
-            });
-          }
+
+          await sendNotification(dbPool, io, student.user_id, {
+            type: 'info',
+            title: 'Zostałeś dodany do kursu!',
+            description: `Nauczyciel dodał Cię do nowego kursu: "${title}"`,
+            link: `/dashboard/courses/${courseId}`
+          });
         }
       }
     }
@@ -205,14 +205,13 @@ router.delete('/:id', protect, async (req, res) => {
   );
 
   const io = req.app.get('io');
-  if (io && students.length > 0) {
-    students.forEach(s => {
-      io.to(`user_${s.student_id}`).emit('notification', {
-        type: 'warning',
-        title: 'Kurs został usunięty',
-        description: `Nauczyciel usunął kurs "${courseTitle}".`
+  for (const s of students) {
+      await sendNotification(dbPool, io, s.student_id, {
+          type: 'warning',
+          title: 'Kurs został usunięty',
+          description: `Nauczyciel usunął kurs "${courseTitle}".`,
+          link: '#'
       });
-    });
   }
 
   res.json({ success: true, message: 'Kurs usunięty.' });
@@ -340,14 +339,12 @@ router.post('/:id/enroll', protect, async (req, res) => {
   );
 
   const io = req.app.get('io');
-  if (io) {
-    io.to(`user_${studentId}`).emit('notification', {
-      type: 'info',
-      title: 'Zostałeś dodany do kursu!',
-      description: `Nauczyciel dodał Cię do kursu: "${courseTitle}"`,
-      link: `/dashboard/courses/${courseId}`
+  await sendNotification(dbPool, io, studentId, {
+        type: 'info',
+        title: 'Zostałeś dodany do kursu!',
+        description: `Nauczyciel dodał Cię do kursu: "${courseTitle}"`,
+        link: `/dashboard/courses/${courseId}`
     });
-  }
 
   res.json({ success: true, message: 'Uczeń dodany.' });
 });
@@ -395,13 +392,12 @@ router.delete('/:id/students/:studentId', protect, async (req, res) => {
   );
 
   const io = req.app.get('io');
-  if (io) {
-    io.to(`user_${studentId}`).emit('notification', {
+  await sendNotification(dbPool, io, studentId, {
       type: 'warning',
       title: 'Zostałeś usunięty z kursu',
-      description: `Nauczyciel usunął Cię z kursu "${courseTitle}".`
-    });
-  }
+      description: `Nauczyciel usunął Cię z kursu "${courseTitle}".`,
+      link: '#' 
+  });
 
   res.json({ success: true, message: 'Uczeń usunięty.' });
 });
@@ -530,14 +526,12 @@ router.post('/join', protect, async (req, res) => {
     );
 
     const io = req.app.get('io');
-    if (io) {
-      io.to(`user_${teacher_id}`).emit('notification', {
+    await sendNotification(dbPool, io, teacher_id, {
         type: 'info',
         title: 'Nowy uczeń!',
         description: `${req.user.first_name} ${req.user.last_name} dołączył do kursu "${title}"`,
         link: `/dashboard/courses/${course_id}`
-      });
-    }
+    });
 
     res.json({ success: true, message: 'Dołączono.' });
   } catch (error) {
@@ -586,13 +580,13 @@ router.delete('/:id/leave', protect, async (req, res) => {
   if (courses.length > 0) {
     const { teacher_id, title } = courses[0];
     const io = req.app.get('io');
-    if (io) {
-      io.to(`user_${teacher_id}`).emit('notification', {
+    
+    await sendNotification(dbPool, io, teacher_id, {
         type: 'warning',
         title: 'Uczeń opuścił kurs',
-        description: `${req.user.first_name} ${req.user.last_name} opuścił kurs "${title}"`
-      });
-    }
+        description: `${req.user.first_name} ${req.user.last_name} opuścił kurs "${title}".`,
+        link: `/dashboard/courses/${courseId}`
+    });
   }
 
   res.json({ success: true, message: 'Opuszczono kurs.' });
