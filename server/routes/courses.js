@@ -3,26 +3,27 @@ const mysql = require('mysql2/promise');
 const { protect } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
+const { sendNotification } = require('../utils/notifications');
 const dbPool = mysql.createPool(process.env.DATABASE_URL);
 
 /**
  * @swagger
  * tags:
  *   - name: Courses
- *     description: Zarządzanie kursami i uczniami
+ *     description: Zarządzanie kursami, uczniami i dostępem do kursów
  */
 
 /**
  * @swagger
  * /api/courses:
  *   get:
- *     summary: Pobiera kursy (dla nauczyciela lub ucznia)
+ *     summary: Pobiera kursy przypisane do użytkownika (nauczyciela lub ucznia)
  *     tags: [Courses]
  *     security:
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Lista kursów z informacją o placówce i liczbie uczniów
+ *         description: Lista kursów
  */
 router.get('/', protect, async (req, res) => {
   let query = '';
@@ -65,7 +66,7 @@ router.get('/', protect, async (req, res) => {
  * @swagger
  * /api/courses:
  *   post:
- *     summary: Nauczyciel tworzy nowy kurs (z opcją dodania uczniów)
+ *     summary: Tworzy nowy kurs (tylko nauczyciel)
  *     tags: [Courses]
  *     security:
  *       - cookieAuth: []
@@ -95,7 +96,7 @@ router.get('/', protect, async (req, res) => {
  *                   type: string
  *     responses:
  *       201:
- *         description: Kurs utworzony
+ *         description: Kurs został utworzony
  */
 router.post('/', protect, async (req, res) => {
   if (req.user.role !== 'teacher') {
@@ -142,14 +143,13 @@ router.post('/', protect, async (req, res) => {
           );
 
           const io = req.app.get('io');
-          if (io) {
-            io.to(`user_${student.user_id}`).emit('notification', {
-              type: 'info',
-              title: 'Zostałeś dodany do kursu!',
-              description: `Nauczyciel dodał Cię do nowego kursu: "${title}"`,
-              link: `/dashboard/courses/${courseId}`
-            });
-          }
+
+          await sendNotification(dbPool, io, student.user_id, {
+            type: 'info',
+            title: 'Zostałeś dodany do kursu!',
+            description: `Nauczyciel dodał Cię do nowego kursu: "${title}"`,
+            link: `/dashboard/courses/${courseId}`
+          });
         }
       }
     }
@@ -168,7 +168,7 @@ router.post('/', protect, async (req, res) => {
  * @swagger
  * /api/courses/{id}:
  *   delete:
- *     summary: Usuwa kurs
+ *     summary: Usuwa kurs (tylko nauczyciel)
  *     tags: [Courses]
  *     security:
  *       - cookieAuth: []
@@ -180,7 +180,7 @@ router.post('/', protect, async (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Kurs usunięty
+ *         description: Kurs został usunięty
  */
 router.delete('/:id', protect, async (req, res) => {
   if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Brak uprawnień.' });
@@ -205,14 +205,13 @@ router.delete('/:id', protect, async (req, res) => {
   );
 
   const io = req.app.get('io');
-  if (io && students.length > 0) {
-    students.forEach(s => {
-      io.to(`user_${s.student_id}`).emit('notification', {
-        type: 'warning',
-        title: 'Kurs został usunięty',
-        description: `Nauczyciel usunął kurs "${courseTitle}".`
+  for (const s of students) {
+      await sendNotification(dbPool, io, s.student_id, {
+          type: 'warning',
+          title: 'Kurs został usunięty',
+          description: `Nauczyciel usunął kurs "${courseTitle}".`,
+          link: '#'
       });
-    });
   }
 
   res.json({ success: true, message: 'Kurs usunięty.' });
@@ -222,7 +221,7 @@ router.delete('/:id', protect, async (req, res) => {
  * @swagger
  * /api/courses/{id}:
  *   put:
- *     summary: Edytuje kurs
+ *     summary: Edytuje kurs (tylko nauczyciel)
  *     tags: [Courses]
  *     security:
  *       - cookieAuth: []
@@ -251,7 +250,7 @@ router.delete('/:id', protect, async (req, res) => {
  *                 enum: [individual, group]
  *     responses:
  *       200:
- *         description: Zaktualizowano
+ *         description: Kurs został zaktualizowany
  */
 router.put('/:id', protect, async (req, res) => {
   if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Brak uprawnień.' });
@@ -282,7 +281,7 @@ router.put('/:id', protect, async (req, res) => {
  * @swagger
  * /api/courses/{id}/enroll:
  *   post:
- *     summary: Dodaje ucznia do kursu po emailu
+ *     summary: Dodaje ucznia do kursu na podstawie emaila (tylko nauczyciel)
  *     tags: [Courses]
  *     security:
  *       - cookieAuth: []
@@ -305,7 +304,7 @@ router.put('/:id', protect, async (req, res) => {
  *                 type: string
  *     responses:
  *       200:
- *         description: Uczeń dodany
+ *         description: Uczeń dodany do kursu
  *       404:
  *         description: Uczeń nie istnieje
  */
@@ -340,23 +339,21 @@ router.post('/:id/enroll', protect, async (req, res) => {
   );
 
   const io = req.app.get('io');
-  if (io) {
-    io.to(`user_${studentId}`).emit('notification', {
-      type: 'info',
-      title: 'Zostałeś dodany do kursu!',
-      description: `Nauczyciel dodał Cię do kursu: "${courseTitle}"`,
-      link: `/dashboard/courses/${courseId}`
+  await sendNotification(dbPool, io, studentId, {
+        type: 'info',
+        title: 'Zostałeś dodany do kursu!',
+        description: `Nauczyciel dodał Cię do kursu: "${courseTitle}"`,
+        link: `/dashboard/courses/${courseId}`
     });
-  }
 
-  res.json({ success: true, message: 'Uczeń dodany do kursu.' });
+  res.json({ success: true, message: 'Uczeń dodany.' });
 });
 
 /**
  * @swagger
  * /api/courses/{id}/students/{studentId}:
  *   delete:
- *     summary: Usuwa ucznia z kursu
+ *     summary: Usuwa ucznia z kursu (tylko nauczyciel)
  *     tags: [Courses]
  *     security:
  *       - cookieAuth: []
@@ -373,7 +370,7 @@ router.post('/:id/enroll', protect, async (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Uczeń usunięty z kursu
+ *         description: Uczeń został usunięty z kursu
  */
 router.delete('/:id/students/:studentId', protect, async (req, res) => {
   if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Brak uprawnień.' });
@@ -395,22 +392,21 @@ router.delete('/:id/students/:studentId', protect, async (req, res) => {
   );
 
   const io = req.app.get('io');
-  if (io) {
-    io.to(`user_${studentId}`).emit('notification', {
+  await sendNotification(dbPool, io, studentId, {
       type: 'warning',
       title: 'Zostałeś usunięty z kursu',
-      description: `Nauczyciel usunął Cię z kursu "${courseTitle}".`
-    });
-  }
+      description: `Nauczyciel usunął Cię z kursu "${courseTitle}".`,
+      link: '#' 
+  });
 
-  res.json({ success: true, message: 'Uczeń usunięty z kursu.' });
+  res.json({ success: true, message: 'Uczeń usunięty.' });
 });
 
 /**
  * @swagger
  * /api/courses/{id}/details:
  *   get:
- *     summary: Pobiera szczegóły kursu i listę zapisanych uczniów (dla nauczyciela)
+ *     summary: Pobiera szczegóły kursu oraz listę uczniów (nauczyciel) lub dane kursu (uczeń)
  *     tags: [Courses]
  *     security:
  *       - cookieAuth: []
@@ -422,7 +418,7 @@ router.delete('/:id/students/:studentId', protect, async (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Szczegóły kursu i lista uczniów
+ *         description: Zwraca dane kursu (i listę uczniów dla nauczyciela)
  */
 router.get('/:id/details', protect, async (req, res) => {
   const courseId = req.params.id;
@@ -456,7 +452,7 @@ router.get('/:id/details', protect, async (req, res) => {
     const [courseRows] = await dbPool.execute(query, params);
 
     if (courseRows.length === 0) {
-      return res.status(404).json({ message: 'Kurs nie istnieje lub nie masz do niego dostępu.' });
+      return res.status(404).json({ message: 'Kurs nie istnieje lub brak dostępu.' });
     }
 
     let studentRows = [];
@@ -485,7 +481,7 @@ router.get('/:id/details', protect, async (req, res) => {
  * @swagger
  * /api/courses/join:
  *   post:
- *     summary: Uczeń dołącza do kursu za pomocą kodu
+ *     summary: Uczeń dołącza do kursu za pomocą kodu zaproszenia
  *     tags: [Courses]
  *     security:
  *       - cookieAuth: []
@@ -502,9 +498,9 @@ router.get('/:id/details', protect, async (req, res) => {
  *                 type: string
  *     responses:
  *       200:
- *         description: Dołączono pomyślnie
+ *         description: Dołączono do kursu
  *       400:
- *         description: Już jesteś w tym kursie lub brak kodu
+ *         description: Błąd — brak kodu lub już zapisany
  *       404:
  *         description: Nieprawidłowy kod
  */
@@ -530,14 +526,12 @@ router.post('/join', protect, async (req, res) => {
     );
 
     const io = req.app.get('io');
-    if (io) {
-      io.to(`user_${teacher_id}`).emit('notification', {
+    await sendNotification(dbPool, io, teacher_id, {
         type: 'info',
         title: 'Nowy uczeń!',
         description: `${req.user.first_name} ${req.user.last_name} dołączył do kursu "${title}"`,
         link: `/dashboard/courses/${course_id}`
-      });
-    }
+    });
 
     res.json({ success: true, message: 'Dołączono.' });
   } catch (error) {
@@ -561,7 +555,7 @@ router.post('/join', protect, async (req, res) => {
  *         name: id
  *         required: true
  *         schema:
- *           type: string
+ *           type: integer
  *     responses:
  *       200:
  *         description: Opuszczono kurs
@@ -586,16 +580,77 @@ router.delete('/:id/leave', protect, async (req, res) => {
   if (courses.length > 0) {
     const { teacher_id, title } = courses[0];
     const io = req.app.get('io');
-    if (io) {
-      io.to(`user_${teacher_id}`).emit('notification', {
+    
+    await sendNotification(dbPool, io, teacher_id, {
         type: 'warning',
         title: 'Uczeń opuścił kurs',
-        description: `${req.user.first_name} ${req.user.last_name} opuścił kurs "${title}"`
-      });
-    }
+        description: `${req.user.first_name} ${req.user.last_name} opuścił kurs "${title}".`,
+        link: `/dashboard/courses/${courseId}`
+    });
   }
 
   res.json({ success: true, message: 'Opuszczono kurs.' });
+});
+
+/**
+ * @swagger
+ * /api/courses/scheduler-list:
+ *   get:
+ *     summary: Pobiera listę osób i kursów dla kreatora harmonogramu
+ *     tags: [Courses]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Lista osób i kursów
+ */
+router.get('/scheduler-list', protect, async (req, res) => {
+  const userId = req.user.user_id;
+  const role = req.user.role;
+  let query = '';
+  let params = [userId];
+
+  try {
+    if (role === 'teacher') {
+      query = `
+        SELECT 
+          u.user_id as person_id,
+          u.first_name,
+          u.last_name,
+          u.email,
+          c.course_id,
+          c.title as course_title,
+          c.course_type
+        FROM Courses c
+        JOIN Enrollments e ON c.course_id = e.course_id
+        JOIN Users u ON e.student_id = u.user_id
+        WHERE c.teacher_id = ?
+        ORDER BY u.last_name ASC, c.title ASC
+      `;
+    } else {
+      query = `
+        SELECT 
+          u.user_id as person_id,
+          u.first_name,
+          u.last_name,
+          u.email,
+          c.course_id,
+          c.title as course_title,
+          c.course_type
+        FROM Enrollments e
+        JOIN Courses c ON e.course_id = c.course_id
+        JOIN Users u ON c.teacher_id = u.user_id
+        WHERE e.student_id = ?
+        ORDER BY u.last_name ASC, c.title ASC
+      `;
+    }
+
+    const [rows] = await dbPool.execute(query, params);
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error("Błąd pobierania listy do harmonogramu:", error);
+    res.status(500).json({ message: 'Błąd serwera.' });
+  }
 });
 
 module.exports = router;

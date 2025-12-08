@@ -1,6 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useSocket } from "@/context/SocketContext";
+import { notificationsApi } from "@/api/notifications";
+import { useAuth } from "@/hooks/useAuth";
 
 export interface NotificationItem {
   id: string;
@@ -8,15 +10,8 @@ export interface NotificationItem {
   description: string;
   link?: string;
   type: 'info' | 'success' | 'warning' | 'error' | 'message';
-  timestamp: Date;
+  timestamp: string | Date;
   read: boolean;
-}
-
-interface SocketNotificationPayload {
-  title: string;
-  description: string;
-  link?: string;
-  type?: 'info' | 'success' | 'warning' | 'error' | 'message';
 }
 
 interface NotificationContextType {
@@ -26,6 +21,9 @@ interface NotificationContextType {
   markAllAsRead: () => void;
   latestNotification: NotificationItem | null;
   clearLatest: () => void;
+  isLoading: boolean;
+  isSoundEnabled: boolean;
+  toggleSound: (enabled: boolean) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -37,34 +35,57 @@ export const useNotifications = () => {
 };
 
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
+  const { user } = useAuth();
   const { socket } = useSocket();
+  
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [latestNotification, setLatestNotification] = useState<NotificationItem | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const [isSoundEnabled, setIsSoundEnabled] = useState(() => {
+      const saved = localStorage.getItem('musicdesk_sound');
+      return saved !== 'false';
+  });
+
+  const toggleSound = (enabled: boolean) => {
+      setIsSoundEnabled(enabled);
+      localStorage.setItem('musicdesk_sound', String(enabled));
+  };
 
   const playSound = () => {
+    if (!isSoundEnabled) return;
+
     try {
         const audio = new Audio('/notification.mp3');
         audio.volume = 0.5;
-        audio.play().catch(() => {});
+        audio.play().catch(() => {
+        });
     } catch(e) { console.error(e); }
   };
 
   useEffect(() => {
+    if (user) {
+      setIsLoading(true);
+      notificationsApi.getAll()
+        .then(data => {
+            const parsed = data.map(n => ({ ...n, timestamp: new Date(n.timestamp) }));
+            setNotifications(parsed);
+        })
+        .catch(err => console.error("Błąd pobierania powiadomień", err))
+        .finally(() => setIsLoading(false));
+    } else {
+        setNotifications([]);
+    }
+  }, [user]);
+
+  useEffect(() => {
     if (!socket) return;
 
-    const handleNotification = (data: SocketNotificationPayload) => {
+    const handleNotification = (newItem: NotificationItem) => {
       playSound();
       
-      const newItem: NotificationItem = {
-        id: Math.random().toString(36).substring(2, 9),
-        title: data.title,
-        description: data.description,
-        link: data.link,
-        type: data.type || 'info',
-        timestamp: new Date(),
-        read: false
-      };
-
+      newItem.timestamp = new Date(); 
+      
       setNotifications(prev => [newItem, ...prev]);
       setLatestNotification(newItem);
 
@@ -78,14 +99,21 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       socket.off("notification", handleNotification);
     };
-  }, [socket]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, isSoundEnabled]);
 
-  const markAsRead = (id: string) => {
+  const markAsRead = async (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    try {
+        await notificationsApi.markAsRead(id);
+    } catch(e) { console.error(e); }
   };
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    try {
+        await notificationsApi.markAllAsRead();
+    } catch(e) { console.error(e); }
   };
 
   const clearLatest = () => setLatestNotification(null);
@@ -93,7 +121,17 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, markAsRead, markAllAsRead, latestNotification, clearLatest }}>
+    <NotificationContext.Provider value={{ 
+        notifications, 
+        unreadCount, 
+        markAsRead, 
+        markAllAsRead, 
+        latestNotification, 
+        clearLatest, 
+        isLoading,
+        isSoundEnabled,
+        toggleSound 
+    }}>
       {children}
     </NotificationContext.Provider>
   );

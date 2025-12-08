@@ -42,9 +42,15 @@ export const meetingsApi = {
     const response = await api.get<{ success: boolean; data: Meeting[] }>(`/meetings/calendar?${params.toString()}`);
     return response.data.data;
   },
-  getAvailability: async (courseId: number, date: string) => {
+  getAvailability: async (courseId: number | null, date: string) => {
+    const params = new URLSearchParams();
+    params.append('date', date);
+    if (courseId) {
+        params.append('course_id', courseId.toString());
+    }
+
     const response = await api.get<{ success: boolean; busySlots: { start: string, duration: number }[] }>(
-        `/meetings/availability?course_id=${courseId}&date=${date}`
+        `/meetings/availability?${params.toString()}`
     );
     return response.data.busySlots;
   },
@@ -79,5 +85,14 @@ export const meetingsApi = {
   getByCourseId: async (courseId: number | string) => {
     const response = await api.get<{ success: boolean; data: Meeting[] }>(`/meetings/course/${courseId}`);
     return response.data.data;
+  },
+  createTimeOff: async (data: { start_time: string; end_time: string; note?: string }) => {
+      return await api.post('/meetings/time-off', data);
+  },
+  updateTimeOff: async (id: number, data: { start_time: string; end_time: string; note?: string }) => {
+      return await api.put(`/meetings/time-off/${id}`, data);
+  },
+  deleteTimeOff: async (id: number) => {
+      return await api.delete(`/meetings/time-off/${id}`);
   },
 };

@@ -3,6 +3,16 @@ import type { Course } from '@/types/Course';
 import type { Student } from '@/types/Student';
 import type { CreateCoursePayload, UpdateCoursePayload } from '@/types/Course';
 
+export interface SchedulerOption {
+  person_id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  course_id: number;
+  course_title: string;
+  course_type: string;
+}
+
 export const coursesApi = {
   getAll: async () => {
     const response = await api.get<{ success: boolean; data: Course[] }>('/courses');
@@ -32,5 +42,9 @@ export const coursesApi = {
   },
   leaveCourse: async (courseId: number) => {
     return await api.delete(`/courses/${courseId}/leave`);
-  }
+  },
+  getSchedulerList: async () => {
+    const response = await api.get<{ success: boolean; data: SchedulerOption[] }>('/courses/scheduler-list');
+    return response.data.data;
+  },
 };

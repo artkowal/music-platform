@@ -1,10 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useAuth } from "@/hooks/useAuth";
+import { Check } from "lucide-react";
 
 // Komponenty UI
 import { Button } from "@/components/ui/button";
@@ -31,17 +32,19 @@ import { cn } from "@/lib/utils";
 import registerImage from "@/assets/images/register_image.webp";
 import logo from "@/assets/logo.png";
 
+// Regex do hasła
+const passwordRegex = /(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9])(?=.{8,})/;
+
 // Schemat Zod
 const formSchema = z
   .object({
     firstName: z.string().min(2, { message: "Imię musi mieć co najmniej 2 znaki." }),
     lastName: z.string().min(2, { message: "Nazwisko musi mieć co najmniej 2 znaki." }),
     email: z.string().email({ message: "Niepoprawny adres email." }),
-    password: z.string().min(6, { message: "Hasło musi mieć co najmniej 6 znaków." }),
+    password: z.string().regex(passwordRegex, { 
+      message: "Hasło jest za słabe (sprawdź wymagania poniżej)." 
+    }),
     confirmPassword: z.string(),
-    
-    // Nadpisze domyślny błąd (np. "invalid_type"), gdy pole
-    // otrzyma 'undefined' (bo nic nie wybrano).
     role: z.enum(["student", "teacher"], {
       message: "Musisz wybrać rolę.",
     }),
@@ -70,17 +73,29 @@ export function RegisterForm({ className, ...props }: RegisterFormProps) {
     },
   });
 
+  const passwordValue = form.watch("password");
+
+  const passwordRequirements = useMemo(() => {
+    const pwd = passwordValue || "";
+    return [
+        { label: "Min. 8 znaków", met: pwd.length >= 8 },
+        { label: "1 duża litera", met: /[A-Z]/.test(pwd) },
+        { label: "1 mała litera", met: /[a-z]/.test(pwd) },
+        { label: "1 cyfra", met: /[0-9]/.test(pwd) },
+        { label: "1 znak specjalny", met: /[^A-Za-z0-9]/.test(pwd) },
+    ];
+  }, [passwordValue]);
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setApiError(null);
     try {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { confirmPassword, ...registerData } = values;
-      
       await register(registerData);
       navigate("/dashboard");
     } catch (error) {
-      // Wyświetlamy błąd z backendu
-      const err = error as { response?: { data?: { message?: string } } };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const err = error as any; 
       setApiError(err.response?.data?.message || "Wystąpił błąd podczas rejestracji.");
     }
   }
@@ -102,7 +117,6 @@ export function RegisterForm({ className, ...props }: RegisterFormProps) {
                   </p>
                 </div>
 
-                {/* Układ siatki dla Imienia i Nazwiska */}
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -156,7 +170,6 @@ export function RegisterForm({ className, ...props }: RegisterFormProps) {
                         <FormControl>
                           <Input type="password" placeholder="••••••••" {...field} />
                         </FormControl>
-                        <FormMessage />
                       </FormItem>
                     )}
                   />
@@ -173,6 +186,25 @@ export function RegisterForm({ className, ...props }: RegisterFormProps) {
                       </FormItem>
                     )}
                   />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 bg-muted/40 p-3 rounded-md border text-[11px]">
+                    {passwordRequirements.map((req, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                            {req.met ? (
+                                <div className="h-4 w-4 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">
+                                    <Check className="h-2.5 w-2.5 text-green-600" />
+                                </div>
+                            ) : (
+                                <div className="h-4 w-4 rounded-full bg-muted border flex items-center justify-center shrink-0">
+                                    <div className="h-1 w-1 rounded-full bg-muted-foreground/50" />
+                                </div>
+                            )}
+                            <span className={cn(req.met ? "text-green-600 font-medium" : "text-muted-foreground")}>
+                                {req.label}
+                            </span>
+                        </div>
+                    ))}
                 </div>
 
                 <FormField
@@ -197,7 +229,6 @@ export function RegisterForm({ className, ...props }: RegisterFormProps) {
                   )}
                 />
 
-                {/* błąd z backendu, jeśli wystąpi */}
                 {apiError && (
                   <p className="text-sm font-medium text-destructive">{apiError}</p>
                 )}
