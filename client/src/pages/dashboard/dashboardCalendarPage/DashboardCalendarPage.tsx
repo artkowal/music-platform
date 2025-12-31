@@ -54,9 +54,10 @@ export default function DashboardCalendarPage() {
           setCourses(allCourses);
       }
 
+      const currentYear = new Date().getFullYear();
       const meetingsData = await meetingsApi.getCalendar(
-          new Date(new Date().getFullYear(), 0, 1).toISOString(),
-          new Date(new Date().getFullYear(), 11, 31).toISOString()
+          new Date(currentYear - 1, 0, 1).toISOString(),
+          new Date(currentYear + 1, 11, 31).toISOString()
       ); 
 
       const mappedEvents: CalendarEvent[] = (meetingsData as ExtendedMeeting[]).map((m) => {

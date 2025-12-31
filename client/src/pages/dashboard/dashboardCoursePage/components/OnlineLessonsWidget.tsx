@@ -15,8 +15,19 @@ interface Props {
 }
 
 export function OnlineLessonsWidget({ meetings, onOpenDetails, onSchedule }: Props) {
+  const now = new Date();
+  
   const upcoming = meetings
-    .filter(m => m.type === 'online' && m.status !== 'cancelled' && m.status !== 'completed' && m.status !== 'noshow')
+    .filter(m => {
+        if (m.status === 'cancelled' || m.status === 'completed' || m.status === 'noshow') return false;
+        
+        if (m.type !== 'online') return false;
+
+        const meetingDate = new Date(m.scheduled_time);
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        
+        return meetingDate > yesterday;
+    })
     .sort((a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime());
 
   return (
