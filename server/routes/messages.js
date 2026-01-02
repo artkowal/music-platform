@@ -8,16 +8,17 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
 /**
  * @swagger
  * tags:
- *   - name: Komentarze
- *     description: Operacje związane z komentarzami, odczytem, edycją i powiadomieniami
+ *   - name: Wiadomości
+ *     description: Czat lekcyjny - wymiana wiadomości między nauczycielem a uczniem
  */
 
 /**
  * @swagger
- * /api/comments/lesson/{lessonId}:
+ * /api/messages/lesson/{lessonId}:
  *   get:
- *     summary: Pobiera wszystkie komentarze dla lekcji
- *     tags: [Komentarze]
+ *     summary: Pobiera historię czatu dla danej lekcji
+ *     tags:
+ *       - Wiadomości
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -29,7 +30,7 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  *         description: ID lekcji
  *     responses:
  *       200:
- *         description: Lista komentarzy
+ *         description: Lista wiadomości
  *       500:
  *         description: Błąd serwera
  */
@@ -39,35 +40,36 @@ router.get('/lesson/:lessonId', protect, async (req, res) => {
   try {
     const [rows] = await dbPool.execute(`
       SELECT 
-        c.comment_id, 
-        c.content, 
-        c.created_at, 
-        c.updated_at, 
-        c.is_deleted,
-        c.user_id,
+        m.message_id, 
+        m.content, 
+        m.created_at, 
+        m.updated_at, 
+        m.is_deleted,
+        m.user_id,
         u.first_name, 
         u.last_name, 
         u.role, 
         u.email
-      FROM Comments c
-      JOIN Users u ON c.user_id = u.user_id
-      WHERE c.lesson_id = ?
-      ORDER BY c.created_at ASC
+      FROM Lesson_Messages m
+      JOIN Users u ON m.user_id = u.user_id
+      WHERE m.lesson_id = ?
+      ORDER BY m.created_at ASC
     `, [lessonId]);
 
     res.json({ success: true, data: rows });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Błąd pobierania komentarzy.' });
+    res.status(500).json({ message: 'Błąd pobierania wiadomości.' });
   }
 });
 
 /**
  * @swagger
- * /api/comments/lesson/{lessonId}/unread:
+ * /api/messages/lesson/{lessonId}/unread:
  *   get:
- *     summary: Pobiera liczbę nieprzeczytanych komentarzy w lekcji
- *     tags: [Komentarze]
+ *     summary: Pobiera liczbę nieprzeczytanych wiadomości w lekcji
+ *     tags:
+ *       - Wiadomości
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -79,7 +81,7 @@ router.get('/lesson/:lessonId', protect, async (req, res) => {
  *         description: ID lekcji
  *     responses:
  *       200:
- *         description: Liczba nieprzeczytanych komentarzy
+ *         description: Liczba nieprzeczytanych wiadomości
  *       500:
  *         description: Błąd serwera
  */
@@ -89,10 +91,10 @@ router.get('/lesson/:lessonId/unread', protect, async (req, res) => {
 
   try {
     const [rows] = await dbPool.execute(`
-      SELECT COUNT(*) as count 
-      FROM Comments 
-      WHERE lesson_id = ? 
-        AND user_id != ? 
+      SELECT COUNT(*) AS count
+      FROM Lesson_Messages
+      WHERE lesson_id = ?
+        AND user_id != ?
         AND is_read = FALSE
         AND is_deleted = FALSE
     `, [lessonId, userId]);
@@ -106,10 +108,11 @@ router.get('/lesson/:lessonId/unread', protect, async (req, res) => {
 
 /**
  * @swagger
- * /api/comments/lesson/{lessonId}/read:
+ * /api/messages/lesson/{lessonId}/read:
  *   put:
- *     summary: Oznacza wszystkie komentarze innych użytkowników jako przeczytane
- *     tags: [Komentarze]
+ *     summary: Oznacza wiadomości innych użytkowników jako przeczytane
+ *     tags:
+ *       - Wiadomości
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -131,10 +134,10 @@ router.put('/lesson/:lessonId/read', protect, async (req, res) => {
 
   try {
     await dbPool.execute(`
-      UPDATE Comments 
-      SET is_read = TRUE 
-      WHERE lesson_id = ? 
-        AND user_id != ? 
+      UPDATE Lesson_Messages
+      SET is_read = TRUE
+      WHERE lesson_id = ?
+        AND user_id != ?
         AND is_read = FALSE
     `, [lessonId, userId]);
 
@@ -147,10 +150,11 @@ router.put('/lesson/:lessonId/read', protect, async (req, res) => {
 
 /**
  * @swagger
- * /api/comments:
+ * /api/messages:
  *   post:
- *     summary: Dodaje nowy komentarz do lekcji
- *     tags: [Komentarze]
+ *     summary: Wysyła nową wiadomość do lekcji
+ *     tags:
+ *       - Wiadomości
  *     security:
  *       - cookieAuth: []
  *     requestBody:
@@ -168,10 +172,10 @@ router.put('/lesson/:lessonId/read', protect, async (req, res) => {
  *                 description: ID lekcji
  *               content:
  *                 type: string
- *                 description: Treść komentarza
+ *                 description: Treść wiadomości
  *     responses:
  *       201:
- *         description: Komentarz dodany
+ *         description: Wiadomość wysłana
  *       400:
  *         description: Błędne dane
  *       500:
@@ -181,15 +185,15 @@ router.post('/', protect, async (req, res) => {
   const { lesson_id, content } = req.body;
 
   if (!content || !content.trim()) {
-    return res.status(400).json({ message: 'Treść komentarza nie może być pusta.' });
+    return res.status(400).json({ message: 'Treść wiadomości nie może być pusta.' });
   }
 
   try {
     await dbPool.execute(
-      'INSERT INTO Comments (lesson_id, user_id, content, is_read) VALUES (?, ?, ?, FALSE)',
+      'INSERT INTO Lesson_Messages (lesson_id, user_id, content, is_read) VALUES (?, ?, ?, FALSE)',
       [lesson_id, req.user.user_id, content]
     );
-    res.status(201).json({ success: true, message: 'Dodano komentarz.' });
+    res.status(201).json({ success: true, message: 'Wysłano wiadomość.' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Błąd serwera.' });
@@ -198,19 +202,20 @@ router.post('/', protect, async (req, res) => {
 
 /**
  * @swagger
- * /api/comments/{commentId}:
+ * /api/messages/{messageId}:
  *   put:
- *     summary: Edytuje komentarz użytkownika
- *     tags: [Komentarze]
+ *     summary: Edytuje wiadomość (tylko autor)
+ *     tags:
+ *       - Wiadomości
  *     security:
  *       - cookieAuth: []
  *     parameters:
  *       - in: path
- *         name: commentId
+ *         name: messageId
  *         required: true
  *         schema:
  *           type: integer
- *         description: ID komentarza
+ *         description: ID wiadomości
  *     requestBody:
  *       required: true
  *       content:
@@ -220,27 +225,35 @@ router.post('/', protect, async (req, res) => {
  *             properties:
  *               content:
  *                 type: string
- *                 description: Nowa treść komentarza
+ *                 description: Nowa treść
  *     responses:
  *       200:
- *         description: Komentarz zaktualizowany
+ *         description: Zaktualizowano
  *       403:
  *         description: Brak uprawnień
  *       404:
- *         description: Nie znaleziono komentarza
+ *         description: Nie znaleziono
  *       500:
  *         description: Błąd serwera
  */
-router.put('/:commentId', protect, async (req, res) => {
-  const { commentId } = req.params;
+router.put('/:messageId', protect, async (req, res) => {
+  const { messageId } = req.params;
   const { content } = req.body;
 
   try {
-    const [check] = await dbPool.execute('SELECT user_id FROM Comments WHERE comment_id = ?', [commentId]);
+    const [check] = await dbPool.execute(
+      'SELECT user_id FROM Lesson_Messages WHERE message_id = ?',
+      [messageId]
+    );
+
     if (check.length === 0) return res.status(404).json({ message: 'Nie znaleziono.' });
     if (check[0].user_id !== req.user.user_id) return res.status(403).json({ message: 'Brak uprawnień.' });
 
-    await dbPool.execute('UPDATE Comments SET content = ? WHERE comment_id = ?', [content, commentId]);
+    await dbPool.execute(
+      'UPDATE Lesson_Messages SET content = ? WHERE message_id = ?',
+      [content, messageId]
+    );
+
     res.json({ success: true, message: 'Zaktualizowano.' });
   } catch (error) {
     console.error(error);
@@ -250,38 +263,47 @@ router.put('/:commentId', protect, async (req, res) => {
 
 /**
  * @swagger
- * /api/comments/{commentId}:
+ * /api/messages/{messageId}:
  *   delete:
- *     summary: Usuwa komentarz użytkownika (oznacza jako usunięty)
- *     tags: [Komentarze]
+ *     summary: Usuwa wiadomość (soft delete)
+ *     tags:
+ *       - Wiadomości
  *     security:
  *       - cookieAuth: []
  *     parameters:
  *       - in: path
- *         name: commentId
+ *         name: messageId
  *         required: true
  *         schema:
  *           type: integer
- *         description: ID komentarza
+ *         description: ID wiadomości
  *     responses:
  *       200:
- *         description: Komentarz usunięty
+ *         description: Usunięto
  *       403:
  *         description: Brak uprawnień
  *       404:
- *         description: Nie znaleziono komentarza
+ *         description: Nie znaleziono
  *       500:
  *         description: Błąd serwera
  */
-router.delete('/:commentId', protect, async (req, res) => {
-  const { commentId } = req.params;
+router.delete('/:messageId', protect, async (req, res) => {
+  const { messageId } = req.params;
 
   try {
-    const [check] = await dbPool.execute('SELECT user_id FROM Comments WHERE comment_id = ?', [commentId]);
+    const [check] = await dbPool.execute(
+      'SELECT user_id FROM Lesson_Messages WHERE message_id = ?',
+      [messageId]
+    );
+
     if (check.length === 0) return res.status(404).json({ message: 'Nie znaleziono.' });
     if (check[0].user_id !== req.user.user_id) return res.status(403).json({ message: 'Brak uprawnień.' });
 
-    await dbPool.execute('UPDATE Comments SET is_deleted = TRUE WHERE comment_id = ?', [commentId]);
+    await dbPool.execute(
+      'UPDATE Lesson_Messages SET is_deleted = TRUE WHERE message_id = ?',
+      [messageId]
+    );
+
     res.json({ success: true, message: 'Usunięto.' });
   } catch (error) {
     console.error(error);
@@ -291,10 +313,11 @@ router.delete('/:commentId', protect, async (req, res) => {
 
 /**
  * @swagger
- * /api/comments/notifications:
+ * /api/messages/notifications:
  *   get:
- *     summary: Pobiera listę nieprzeczytanych powiadomień komentarzy użytkownika
- *     tags: [Komentarze]
+ *     summary: Pobiera listę nieprzeczytanych wiadomości dla użytkownika (do dzwoneczka)
+ *     tags:
+ *       - Wiadomości
  *     security:
  *       - cookieAuth: []
  *     responses:
@@ -309,31 +332,33 @@ router.get('/notifications', protect, async (req, res) => {
   try {
     const query = `
       SELECT 
-        c.comment_id, 
-        c.content, 
-        c.created_at, 
-        c.is_read, 
-        c.lesson_id,
-        l.title as lesson_title,
+        m.message_id,
+        m.content,
+        m.created_at,
+        m.is_read,
+        m.lesson_id,
+        l.title AS lesson_title,
         l.course_id,
-        u.first_name, 
-        u.last_name, 
+        u.first_name,
+        u.last_name,
         u.role
-      FROM Comments c
-      JOIN Lessons l ON c.lesson_id = l.lesson_id
+      FROM Lesson_Messages m
+      JOIN Lessons l ON m.lesson_id = l.lesson_id
       JOIN Courses cr ON l.course_id = cr.course_id
-      JOIN Users u ON c.user_id = u.user_id
-      WHERE c.user_id != ? 
-      AND c.is_read = FALSE
-      AND c.is_deleted = FALSE
-      AND (
-        cr.teacher_id = ?
-        OR EXISTS (
-          SELECT 1 FROM Enrollments e 
-          WHERE e.course_id = cr.course_id AND e.student_id = ?
+      JOIN Users u ON m.user_id = u.user_id
+      WHERE m.user_id != ?
+        AND m.is_read = FALSE
+        AND m.is_deleted = FALSE
+        AND (
+          cr.teacher_id = ?
+          OR EXISTS (
+            SELECT 1
+            FROM Enrollments e
+            WHERE e.course_id = cr.course_id
+              AND e.student_id = ?
+          )
         )
-      )
-      ORDER BY c.created_at DESC
+      ORDER BY m.created_at DESC
       LIMIT 10
     `;
 

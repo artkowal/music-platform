@@ -38,7 +38,7 @@ const initSocket = (io) => {
     });
 
     // 2. Wysyłanie wiadomości
-    socket.on('send_comment', async (data) => {
+    socket.on('send_message', async (data) => {
       const { lessonId, content } = data;
       const userId = socket.user.user_id;
 
@@ -47,13 +47,13 @@ const initSocket = (io) => {
       try {
         // A. Zapisz wiadomość w bazie
         const [result] = await dbPool.execute(
-          'INSERT INTO Comments (lesson_id, user_id, content, is_read) VALUES (?, ?, ?, FALSE)',
+          'INSERT INTO Lesson_Messages (lesson_id, user_id, content, is_read) VALUES (?, ?, ?, FALSE)',
           [lessonId, userId, content]
         );
         
         // B. Wyślij do czatu (pokój lekcji)
-        const newComment = {
-          comment_id: result.insertId,
+        const newMessage = {
+          message_id: result.insertId,
           content: content,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -65,7 +65,7 @@ const initSocket = (io) => {
           email: socket.user.email
         };
 
-        io.to(`lesson_${lessonId}`).emit('receive_comment', newComment);
+        io.to(`lesson_${lessonId}`).emit('receive_message', newMessage);
 
         // C. WYŚLIJ POWIADOMIENIE (GLOBALNE)
         

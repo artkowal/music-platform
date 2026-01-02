@@ -107,9 +107,9 @@ CREATE TABLE IF NOT EXISTS Materials (
   FOREIGN KEY (lesson_id) REFERENCES Lessons(lesson_id) ON DELETE CASCADE
 );
 
--- 8. Tabela Komentarzy
-CREATE TABLE IF NOT EXISTS Comments (
-  comment_id INT AUTO_INCREMENT PRIMARY KEY,
+-- 8. Tabela Wiadomości w Lekcji (Czat)
+CREATE TABLE IF NOT EXISTS Lesson_Messages (
+  message_id INT AUTO_INCREMENT PRIMARY KEY,
   lesson_id INT NOT NULL,
   user_id INT NOT NULL, 
   content TEXT NOT NULL,

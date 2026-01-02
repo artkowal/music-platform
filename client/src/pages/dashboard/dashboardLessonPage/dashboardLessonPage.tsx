@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { lessonsApi } from "@/api/Lesson";
 import { coursesApi } from "@/api/courses";
-import { commentsApi } from "@/api/comments";
+import { messagesApi } from "@/api/messages";
 import { useAuth } from "@/hooks/useAuth";
 import { useSocket } from "@/context/SocketContext";
 import { Button } from "@/components/ui/button";
@@ -14,13 +14,13 @@ import { PenLine, Save, Trash2, Eye, EyeOff, MessageCircle } from "lucide-react"
 import type { Lesson } from "@/types/Lesson";
 import type { Course } from "@/types/Course";
 import type { Student } from "@/types/Student";
-import type { Comment } from "@/types/Comment";
+import type { Message } from "@/types/Message";
 import DOMPurify from "dompurify"; 
 import { RichTextEditor } from "@/components/RichTextEditor";
 
 import { LessonHeader } from "./components/LessonHeader";
 import { LessonMaterials } from "./components/LessonMaterials";
-import { LessonComments } from "./components/LessonCommnets";
+import { LessonMessages } from "./components/LessonMessages"; 
 import { cn } from "@/lib/utils";
 
 export default function DashboardLessonPage() {
@@ -72,10 +72,10 @@ export default function DashboardLessonPage() {
             });
 
             try {
-                const count = await commentsApi.getUnreadCount(lessonId);
+                const count = await messagesApi.getUnreadCount(lessonId);
                 setUnreadCount(count);
             } catch (e) {
-                console.error("Błąd licznika komentarzy", e);
+                console.error("Błąd licznika wiadomości", e);
             }
 
         } catch (error) {
@@ -94,27 +94,25 @@ export default function DashboardLessonPage() {
 
     socket.emit("join_lesson", Number(lessonId));
 
-    const handleReceiveComment = (comment: Comment) => {
-        if (comment.user_id !== user.user_id && !isChatOpen) {
+    const handleReceiveMessage = (message: Message) => {
+        if (message.user_id !== user.user_id && !isChatOpen) {
             setUnreadCount((prev) => prev + 1);
         }
     };
 
-    socket.on("receive_comment", handleReceiveComment);
+    socket.on("receive_message", handleReceiveMessage);
 
     return () => {
-      socket.off("receive_comment", handleReceiveComment);
+      socket.off("receive_message", handleReceiveMessage);
     };
   }, [lessonId, user, socket, isChatOpen]);
-
-
 
   const handleOpenChat = async () => {
     setIsChatOpen(true);
     setUnreadCount(0);
     if (lessonId) {
         try {
-            await commentsApi.markAsRead(lessonId);
+            await messagesApi.markAsRead(lessonId);
         } catch (error) {
             console.error("Błąd oznaczania jako przeczytane", error);
         }
@@ -204,9 +202,7 @@ export default function DashboardLessonPage() {
         )}
       </div>
 
-      {/* DODANO min-w-0 ABY ZAPOBIEC WYPYCHANIU PRZEZ DŁUGIE CIĄGI ZNAKÓW */}
       <div className="flex-1 w-full max-w-5xl mx-auto p-6 md:p-10 pb-24 min-w-0">
-        
         {isEditing ? (
             <div className="grid gap-6 animate-in zoom-in-95 duration-300">
                 <Card className="p-6 grid gap-6">
@@ -315,7 +311,7 @@ export default function DashboardLessonPage() {
                 >
                     <div className="w-[350px] h-[500px] bg-background border rounded-xl shadow-2xl overflow-hidden flex flex-col">
                         {isChatOpen && (
-                            <LessonComments 
+                            <LessonMessages 
                                 lessonId={lesson.lesson_id} 
                                 accentColor={accentColor} 
                                 onClose={() => setIsChatOpen(false)}
