@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useWorkplace } from "@/context/WorkplaceContext";
 import { useAuth } from "@/hooks/useAuth";
 import { RecentActivity } from "./components/RecentActivity";
-import { UpcomingMeetings } from "./components/UpcomingMeetings";
+import { WeeklySchedule } from "./components/WeeklySchedule";
+import { DashboardClock } from "./components/DashboardClock"; 
 import { StatsCards } from "./components/StatsCards";
 import { LessonsToComplete } from "./components/LessonsToComplete";
 import { DashboardOverviewHeader } from "./components/DashboardOverviewHeader";
@@ -35,29 +36,42 @@ export default function DashboardOverviewPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (loading) return <div className="p-8">Ładowanie pulpitu...</div>;
+  if (loading) return <div className="p-8 text-muted-foreground animate-pulse">Ładowanie pulpitu...</div>;
 
   return (
     <div className="animate-in fade-in duration-500 pb-10">
       
       <DashboardOverviewHeader user={user} />
 
-      <div className="max-w-7xl mx-auto space-y-8 px-2 md:px-0">
+      <div className="max-w-7xl mx-auto space-y-6 px-4 md:px-8">
         
-        {data && <StatsCards stats={data.stats} isTeacher={isTeacher} />}
-
-        <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+        {/* SEKCJA GÓRNA */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+                {data && <StatsCards stats={data.stats} isTeacher={isTeacher} />}
+            </div>
             
-            <div className="col-span-1 flex flex-col gap-6">
-               {data && <UpcomingMeetings meetings={data.upcomingMeetings} />}
+            <div className="lg:col-span-1 h-full">
+                <DashboardClock />
+            </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            
+            {/* LEWA STRONA */}
+            <div className="lg:col-span-2 space-y-6 h-full">
+               {data && <WeeklySchedule meetings={data.upcomingMeetings} />}
             </div>
 
-            <div className="col-span-1 flex flex-col gap-6">
-               {!isTeacher && data?.lessonsToComplete && (
-                  <LessonsToComplete lessons={data.lessonsToComplete} />
+            {/* PRAWA STRONA */}
+            <div className="lg:col-span-1 space-y-6 h-full min-h-[400px]">
+               {isTeacher ? (
+                   <RecentActivity />
+               ) : (
+                   data?.lessonsToComplete && (
+                      <LessonsToComplete lessons={data.lessonsToComplete} />
+                   )
                )}
-               
-               <RecentActivity />
             </div>
             
         </div>
