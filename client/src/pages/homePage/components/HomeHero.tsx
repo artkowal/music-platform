@@ -19,8 +19,11 @@ export function HomeHero() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 lg:gap-20 items-center mb-24">
             
             {/* LEWA KOLUMNA */}
-            <div className="flex flex-col items-center md:items-start text-center md:text-left space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000">
-
+            <div 
+                className="flex flex-col items-center md:items-start text-center md:text-left space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000"
+                style={{ animationFillMode: 'both' }}
+            >
+                
                 <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-foreground leading-tight">
                   Twoja muzyczna <br />
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-purple-500 to-primary animate-gradient-x bg-[length:200%_auto] pb-2">
@@ -49,7 +52,10 @@ export function HomeHero() {
             </div>
 
             {/* PRAWA KOLUMNA */}
-            <div className="flex justify-center md:justify-end animate-in fade-in slide-in-from-right-8 duration-1000 delay-300">
+            <div 
+                className="flex justify-center md:justify-end animate-in fade-in slide-in-from-right-8 duration-1000 delay-300"
+                style={{ animationFillMode: 'both' }}
+            >
                 <div className="relative group">
                     <div className="absolute -inset-10 bg-primary/20 rounded-full blur-3xl opacity-0 group-hover:opacity-50 transition-opacity duration-700" />
                     
@@ -64,7 +70,10 @@ export function HomeHero() {
 
 
         {/* Mockup Interfejsu */}
-        <div className="w-full max-w-5xl mx-auto relative animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-500">
+        <div 
+            className="w-full max-w-5xl mx-auto relative animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-500"
+            style={{ animationFillMode: 'both' }}
+        >
             <div className="absolute -inset-1 bg-gradient-to-r from-primary/30 to-purple-500/30 rounded-xl blur opacity-30 animate-pulse"></div>
             <div className="relative rounded-xl border border-border/50 bg-background/60 backdrop-blur-xl p-2 md:p-4 shadow-2xl overflow-hidden">
                 {/* Pasek okna */}
