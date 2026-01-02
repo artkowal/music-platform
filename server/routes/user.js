@@ -2,8 +2,10 @@ const express = require('express');
 const mysql = require('mysql2/promise');
 const { hashPassword } = require('../utils/password');
 const bcrypt = require('bcryptjs');
-const { sendTokenResponse } = require('../utils/jwt');
+const { sendTokenResponse, deleteJwtCookie } = require('../utils/jwt');
 const { protect } = require('../middlewares/auth.middleware');
+const { v4: uuidv4 } = require('uuid');
+const { sendEmail } = require('../services/email');
 
 const router = express.Router();
 const dbPool = mysql.createPool(process.env.DATABASE_URL);
@@ -257,68 +259,105 @@ router.put('/password', protect, async (req, res) => {
 
 /**
  * @swagger
- * /api/users/delete:
- *   delete:
- *     summary: Trwale usuwa konto użytkownika
- *     description: Operacja wymaga podania poprawnego hasła użytkownika.
+ * /api/user/request-delete:
+ *   post:
+ *     summary: Wysyła email z linkiem do potwierdzenia usunięcia konta
  *     tags: [User]
  *     security:
  *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Email potwierdzający został wysłany
+ */
+router.post('/request-delete', protect, async (req, res) => {
+  const user = req.user;
+  const token = uuidv4();
+  const expiresAt = new Date(Date.now() + 3600000); // 1h
+
+  await dbPool.execute(
+    'INSERT INTO User_Tokens (token_id, user_id, type, expires_at) VALUES (?, ?, ?, ?)',
+    [token, user.user_id, 'delete_account', expiresAt]
+  );
+
+  const deleteLink = `${process.env.CLIENT_URL}/confirm-delete?token=${token}`;
+  
+  await sendEmail(
+    user.email,
+    'Potwierdzenie usunięcia konta',
+    `<div style="font-family: Arial, sans-serif; padding: 20px;">
+       <h2>Potwierdzenie usunięcia konta</h2>
+       <p>Cześć ${user.first_name},</p>
+       <p>Otrzymaliśmy prośbę o <strong>trwałe usunięcie</strong> Twojego konta w serwisie MusicDesk.</p>
+       <p>Jeśli to nie Ty, zignoruj tę wiadomość. Jeśli chcesz usunąć konto, kliknij poniższy przycisk:</p>
+       <p style="margin: 20px 0;">
+         <a href="${deleteLink}" style="background-color: #ef4444; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+           POTWIERDZAM USUNIĘCIE KONTA
+         </a>
+       </p>
+       <p style="font-size: 12px; color: #666;">Link jest ważny przez 1 godzinę. Ta operacja jest nieodwracalna.</p>
+     </div>`
+  );
+
+  res.json({ success: true, message: 'Email potwierdzający został wysłany.' });
+});
+
+
+
+/**
+ * @swagger
+ * /api/user/confirm-delete:
+ *   post:
+ *     summary: Potwierdza i usuwa konto użytkownika
+ *     tags: [User]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - password
+ *             required: [token]
  *             properties:
- *               password:
+ *               token:
  *                 type: string
  *     responses:
  *       200:
  *         description: Konto zostało usunięte
  *       400:
- *         description: Brak hasła
- *       403:
- *         description: Błędne hasło
- *       404:
- *         description: Użytkownik nie istnieje
- *       500:
- *         description: Błąd serwera
+ *         description: Token nieprawidłowy lub wygasł
  */
-router.delete('/delete', protect, async (req, res) => {
-  const { password } = req.body;
+router.post('/confirm-delete', async (req, res) => {
+  const { token } = req.body;
 
-  if (!password) {
-    return res.status(400).json({ message: 'Wymagane podanie hasła do potwierdzenia.' });
+  const [tokens] = await dbPool.execute(
+    'SELECT * FROM User_Tokens WHERE token_id = ? AND type = "delete_account" AND expires_at > NOW()',
+    [token]
+  );
+
+  if (tokens.length === 0) {
+    return res.status(400).json({ message: 'Link jest nieprawidłowy lub wygasł.' });
   }
 
+  const userId = tokens[0].user_id;
+
+  const connection = await dbPool.getConnection();
   try {
-    const [users] = await dbPool.execute(
-      'SELECT password_hash FROM Users WHERE user_id = ?',
-      [req.user.user_id]
-    );
+    await connection.beginTransaction();
+    
+    // Usuwamy użytkownika
+    await connection.execute('DELETE FROM Users WHERE user_id = ?', [userId]);
+    
+    await connection.commit();
 
-    if (users.length === 0) return res.status(404).json({ message: 'Użytkownik nie istnieje.' });
+    // Czyścimy ciasteczko od razu po usunięciu konta
+    deleteJwtCookie(res);
 
-    const isMatch = await bcrypt.compare(password, users[0].password_hash);
-    if (!isMatch) {
-      return res.status(403).json({ message: 'Nieprawidłowe hasło.' });
-    }
-
-    await dbPool.execute('DELETE FROM Users WHERE user_id = ?', [req.user.user_id]);
-
-    res.clearCookie('token', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict'
-    });
-
-    res.json({ success: true, message: 'Konto zostało usunięte.' });
-  } catch (error) {
-    console.error("Błąd usuwania konta:", error);
-    res.status(500).json({ message: 'Błąd serwera.' });
+    res.json({ success: true, message: 'Konto zostało pomyślnie usunięte.' });
+  } catch (err) {
+    await connection.rollback();
+    console.error("Błąd usuwania:", err);
+    res.status(500).json({ message: 'Błąd serwera podczas usuwania konta.' });
+  } finally {
+    connection.release();
   }
 });
 

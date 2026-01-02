@@ -26,6 +26,10 @@ import DashboardLessonPage from "./pages/dashboard/dashboardLessonPage/dashboard
 import DashboardCalendarPage from "./pages/dashboard/dashboardCalendarPage/DashboardCalendarPage";
 import DashboardFinancesPage from "./pages/dashboard/dashboardFinancesPage/dashboardFinancesPage";
 
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+import ConfirmDeletePage from "./pages/ConfirmDeletePage";
+
 function App() {
   return (
     <>
@@ -35,7 +39,11 @@ function App() {
       <SocketProvider>
          <NotificationProvider>
             <Routes>
-              {/* Niezalogowani uzytkownicy*/}
+              
+              {/* 1. Trasy Całkowicie Publiczne (Dostępne zawsze) */}
+              <Route path="/confirm-delete" element={<ConfirmDeletePage />} />
+
+              {/* 2. Niezalogowani uzytkownicy (Jeśli zalogowany -> przekieruj na Dashboard) */}
               <Route element={<RedirectIfAuth />}>
                 <Route element={<MainLayout />}>
                   <Route path="/" element={<HomePage />} />
@@ -43,9 +51,12 @@ function App() {
 
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
+                
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
               </Route>
 
-              {/* Zalogowani uzytkownicy */}
+              {/* 3. Zalogowani uzytkownicy (Chronione) */}
               <Route element={<ProtectedRoute />}>
                 <Route path="/dashboard" element={<DashboardLayout />}>
                   <Route index element={<DashboardOverviewPage />} />

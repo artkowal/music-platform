@@ -141,6 +141,8 @@ CREATE TABLE IF NOT EXISTS Lesson_Progress (
 CREATE TABLE IF NOT EXISTS User_Tokens (
   token_id VARCHAR(36) PRIMARY KEY,
   user_id INT NOT NULL,
+  type ENUM('session', 'reset_password', 'delete_account') NOT NULL DEFAULT 'session',
+  expires_at DATETIME NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   
   FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE

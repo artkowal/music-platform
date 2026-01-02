@@ -10,8 +10,5 @@ export const usersApi = {
   },
   changePassword: async (data: { currentPassword: string; newPassword: string }) => {
     return await api.put('/user/password', data);
-  },
-  deleteAccount: async (password: string) => {
-    return await api.delete('/users/delete', { data: { password } });
   }
 };
