@@ -10,20 +10,22 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  * @swagger
  * tags:
  *   - name: Courses
- *     description: Zarządzanie kursami, uczniami i dostępem do kursów
+ *     description: Course management, enrollments and access control for teachers and students
  */
 
 /**
  * @swagger
  * /api/courses:
  *   get:
- *     summary: Pobiera kursy przypisane do użytkownika (nauczyciela lub ucznia)
- *     tags: [Courses]
+ *     summary: Get courses for current user
+ *     description: Returns all courses where the user is either the teacher or an enrolled student.
+ *     tags:
+ *       - Courses
  *     security:
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Lista kursów
+ *         description: List of courses available to the user.
  */
 router.get('/', protect, async (req, res) => {
   let query = '';
@@ -66,8 +68,10 @@ router.get('/', protect, async (req, res) => {
  * @swagger
  * /api/courses:
  *   post:
- *     summary: Tworzy nowy kurs (tylko nauczyciel)
- *     tags: [Courses]
+ *     summary: Create a new course
+ *     description: Allows a teacher to create a new course and optionally enroll students by email.
+ *     tags:
+ *       - Courses
  *     security:
  *       - cookieAuth: []
  *     requestBody:
@@ -96,7 +100,9 @@ router.get('/', protect, async (req, res) => {
  *                   type: string
  *     responses:
  *       201:
- *         description: Kurs został utworzony
+ *         description: Course successfully created.
+ *       403:
+ *         description: Only teachers can create courses.
  */
 router.post('/', protect, async (req, res) => {
   if (req.user.role !== 'teacher') {
@@ -168,8 +174,10 @@ router.post('/', protect, async (req, res) => {
  * @swagger
  * /api/courses/{id}:
  *   delete:
- *     summary: Usuwa kurs (tylko nauczyciel)
- *     tags: [Courses]
+ *     summary: Delete a course
+ *     description: Deletes a course owned by the teacher and notifies enrolled students.
+ *     tags:
+ *       - Courses
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -180,7 +188,11 @@ router.post('/', protect, async (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Kurs został usunięty
+ *         description: Course deleted successfully.
+ *       403:
+ *         description: Only the course owner can delete it.
+ *       404:
+ *         description: Course not found.
  */
 router.delete('/:id', protect, async (req, res) => {
   if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Brak uprawnień.' });
@@ -221,8 +233,10 @@ router.delete('/:id', protect, async (req, res) => {
  * @swagger
  * /api/courses/{id}:
  *   put:
- *     summary: Edytuje kurs (tylko nauczyciel)
- *     tags: [Courses]
+ *     summary: Update course details
+ *     description: Updates course title, type, description or workplace. Only the teacher can edit the course.
+ *     tags:
+ *       - Courses
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -250,7 +264,7 @@ router.delete('/:id', protect, async (req, res) => {
  *                 enum: [individual, group]
  *     responses:
  *       200:
- *         description: Kurs został zaktualizowany
+ *         description: Course updated successfully.
  */
 router.put('/:id', protect, async (req, res) => {
   if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Brak uprawnień.' });
@@ -281,8 +295,10 @@ router.put('/:id', protect, async (req, res) => {
  * @swagger
  * /api/courses/{id}/enroll:
  *   post:
- *     summary: Dodaje ucznia do kursu na podstawie emaila (tylko nauczyciel)
- *     tags: [Courses]
+ *     summary: Enroll a student by email
+ *     description: Adds a student to a course by their email address. Only the course teacher can do this.
+ *     tags:
+ *       - Courses
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -304,9 +320,11 @@ router.put('/:id', protect, async (req, res) => {
  *                 type: string
  *     responses:
  *       200:
- *         description: Uczeń dodany do kursu
+ *         description: Student successfully enrolled.
  *       404:
- *         description: Uczeń nie istnieje
+ *         description: Student not found.
+ *       403:
+ *         description: Not your course.
  */
 router.post('/:id/enroll', protect, async (req, res) => {
   if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Brak uprawnień.' });
@@ -353,8 +371,10 @@ router.post('/:id/enroll', protect, async (req, res) => {
  * @swagger
  * /api/courses/{id}/students/{studentId}:
  *   delete:
- *     summary: Usuwa ucznia z kursu (tylko nauczyciel)
- *     tags: [Courses]
+ *     summary: Remove a student from a course
+ *     description: Removes a student from the course and sends them a notification.
+ *     tags:
+ *       - Courses
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -370,7 +390,7 @@ router.post('/:id/enroll', protect, async (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Uczeń został usunięty z kursu
+ *         description: Student removed from course.
  */
 router.delete('/:id/students/:studentId', protect, async (req, res) => {
   if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Brak uprawnień.' });
@@ -406,8 +426,10 @@ router.delete('/:id/students/:studentId', protect, async (req, res) => {
  * @swagger
  * /api/courses/{id}/details:
  *   get:
- *     summary: Pobiera szczegóły kursu oraz listę uczniów (nauczyciel) lub dane kursu (uczeń)
- *     tags: [Courses]
+ *     summary: Get course details
+ *     description: Returns course details. Teachers also receive a list of enrolled students.
+ *     tags:
+ *       - Courses
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -418,7 +440,9 @@ router.delete('/:id/students/:studentId', protect, async (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Zwraca dane kursu (i listę uczniów dla nauczyciela)
+ *         description: Course data and optional student list.
+ *       404:
+ *         description: Course not found or access denied.
  */
 router.get('/:id/details', protect, async (req, res) => {
   const courseId = req.params.id;
@@ -481,8 +505,10 @@ router.get('/:id/details', protect, async (req, res) => {
  * @swagger
  * /api/courses/join:
  *   post:
- *     summary: Uczeń dołącza do kursu za pomocą kodu zaproszenia
- *     tags: [Courses]
+ *     summary: Join a course using invite code
+ *     description: Allows a student to join a course using a valid invite code.
+ *     tags:
+ *       - Courses
  *     security:
  *       - cookieAuth: []
  *     requestBody:
@@ -498,11 +524,11 @@ router.get('/:id/details', protect, async (req, res) => {
  *                 type: string
  *     responses:
  *       200:
- *         description: Dołączono do kursu
+ *         description: Successfully joined the course.
  *       400:
- *         description: Błąd — brak kodu lub już zapisany
+ *         description: Already enrolled.
  *       404:
- *         description: Nieprawidłowy kod
+ *         description: Invalid invite code.
  */
 router.post('/join', protect, async (req, res) => {
   if (req.user.role !== 'student') return res.status(403).json({ message: 'Tylko uczniowie mogą dołączać.' });
@@ -546,8 +572,10 @@ router.post('/join', protect, async (req, res) => {
  * @swagger
  * /api/courses/{id}/leave:
  *   delete:
- *     summary: Uczeń opuszcza kurs
- *     tags: [Courses]
+ *     summary: Leave a course
+ *     description: Allows a student to leave a course and notifies the teacher.
+ *     tags:
+ *       - Courses
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -558,9 +586,9 @@ router.post('/join', protect, async (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Opuszczono kurs
+ *         description: Course left successfully.
  *       403:
- *         description: Brak uprawnień
+ *         description: Only students can leave courses.
  */
 router.delete('/:id/leave', protect, async (req, res) => {
   if (req.user.role !== 'student') return res.status(403).json({ message: 'Brak uprawnień.' });
@@ -596,13 +624,15 @@ router.delete('/:id/leave', protect, async (req, res) => {
  * @swagger
  * /api/courses/scheduler-list:
  *   get:
- *     summary: Pobiera listę osób i kursów dla kreatora harmonogramu
- *     tags: [Courses]
+ *     summary: Get scheduler data
+ *     description: Returns a list of people and courses for building the lesson scheduler.
+ *     tags:
+ *       - Courses
  *     security:
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Lista osób i kursów
+ *         description: Scheduler data (students or teachers with their courses).
  */
 router.get('/scheduler-list', protect, async (req, res) => {
   const userId = req.user.user_id;

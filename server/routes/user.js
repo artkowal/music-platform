@@ -14,15 +14,15 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  * @swagger
  * tags:
  *   - name: User
- *     description: Operacje związane z użytkownikami
+ *     description: User management operations (registration, profile, password, deletion)
  */
 
 /**
  * @swagger
  * /api/user/search:
  *   get:
- *     summary: Wyszukuje uczniów po fragmencie adresu email
- *     description: Zwraca maksymalnie 5 emaili zaczynających się od podanego fragmentu (min. 2 znaki).
+ *     summary: Search students by email fragment
+ *     description: Returns up to 5 email addresses starting with the provided query (minimum 2 characters).
  *     tags: [User]
  *     security:
  *       - cookieAuth: []
@@ -32,10 +32,10 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  *         required: true
  *         schema:
  *           type: string
- *         description: Fragment adresu email
+ *         description: Email fragment to search for
  *     responses:
  *       200:
- *         description: Lista dopasowanych adresów email
+ *         description: List of matching email addresses
  *         content:
  *           application/json:
  *             example:
@@ -68,7 +68,7 @@ router.get('/search', protect, async (req, res) => {
  * @swagger
  * /api/user/register:
  *   post:
- *     summary: Rejestruje nowego użytkownika
+ *     summary: Register a new user
  *     tags: [User]
  *     requestBody:
  *       required: true
@@ -95,11 +95,11 @@ router.get('/search', protect, async (req, res) => {
  *                 type: string
  *     responses:
  *       201:
- *         description: Użytkownik został zarejestrowany
+ *         description: User successfully registered
  *       400:
- *         description: Nieprawidłowe dane lub email już istnieje
+ *         description: Invalid input or email already exists
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.post('/register', async (req, res) => {
   const { email, password, firstName, lastName, role } = req.body;
@@ -146,7 +146,7 @@ router.post('/register', async (req, res) => {
  * @swagger
  * /api/users/profile:
  *   put:
- *     summary: Aktualizuje dane profilowe użytkownika
+ *     summary: Update user profile
  *     tags: [User]
  *     security:
  *       - cookieAuth: []
@@ -163,9 +163,9 @@ router.post('/register', async (req, res) => {
  *                 type: string
  *     responses:
  *       200:
- *         description: Profil został zaktualizowany
+ *         description: Profile updated successfully
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.put('/profile', protect, async (req, res) => {
   const { first_name, last_name } = req.body;
@@ -186,7 +186,7 @@ router.put('/profile', protect, async (req, res) => {
  * @swagger
  * /api/users/password:
  *   put:
- *     summary: Zmienia hasło użytkownika
+ *     summary: Change user password
  *     tags: [User]
  *     security:
  *       - cookieAuth: []
@@ -206,13 +206,13 @@ router.put('/profile', protect, async (req, res) => {
  *                 type: string
  *     responses:
  *       200:
- *         description: Hasło zostało zmienione
+ *         description: Password successfully changed
  *       400:
- *         description: Błędne dane lub za słabe hasło
+ *         description: Invalid input or weak password
  *       404:
- *         description: Użytkownik nie istnieje
+ *         description: User not found
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.put('/password', protect, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
@@ -261,13 +261,19 @@ router.put('/password', protect, async (req, res) => {
  * @swagger
  * /api/user/request-delete:
  *   post:
- *     summary: Wysyła email z linkiem do potwierdzenia usunięcia konta
+ *     summary: Request account deletion
+ *     description: Sends an email with a confirmation link to delete the user's account.
  *     tags: [User]
  *     security:
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Email potwierdzający został wysłany
+ *         description: Confirmation email sent
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: "Email potwierdzający został wysłany."
  */
 router.post('/request-delete', protect, async (req, res) => {
   const user = req.user;
@@ -307,7 +313,8 @@ router.post('/request-delete', protect, async (req, res) => {
  * @swagger
  * /api/user/confirm-delete:
  *   post:
- *     summary: Potwierdza i usuwa konto użytkownika
+ *     summary: Confirm account deletion
+ *     description: Deletes the user's account if the token is valid.
  *     tags: [User]
  *     requestBody:
  *       required: true
@@ -315,15 +322,19 @@ router.post('/request-delete', protect, async (req, res) => {
  *         application/json:
  *           schema:
  *             type: object
- *             required: [token]
+ *             required:
+ *               - token
  *             properties:
  *               token:
  *                 type: string
+ *                 description: Deletion token from email
  *     responses:
  *       200:
- *         description: Konto zostało usunięte
+ *         description: Account successfully deleted
  *       400:
- *         description: Token nieprawidłowy lub wygasł
+ *         description: Invalid or expired token
+ *       500:
+ *         description: Server error
  */
 router.post('/confirm-delete', async (req, res) => {
   const { token } = req.body;

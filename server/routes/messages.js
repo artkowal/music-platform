@@ -8,17 +8,16 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
 /**
  * @swagger
  * tags:
- *   - name: Wiadomości
- *     description: Czat lekcyjny - wymiana wiadomości między nauczycielem a uczniem
+ *   - name: Messages
+ *     description: Lesson chat – message exchange between teacher and student
  */
 
 /**
  * @swagger
  * /api/messages/lesson/{lessonId}:
  *   get:
- *     summary: Pobiera historię czatu dla danej lekcji
- *     tags:
- *       - Wiadomości
+ *     summary: Get chat history for a lesson
+ *     tags: [Messages]
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -27,12 +26,12 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  *         required: true
  *         schema:
  *           type: integer
- *         description: ID lekcji
+ *         description: Lesson ID
  *     responses:
  *       200:
- *         description: Lista wiadomości
+ *         description: List of messages
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.get('/lesson/:lessonId', protect, async (req, res) => {
   const { lessonId } = req.params;
@@ -67,9 +66,8 @@ router.get('/lesson/:lessonId', protect, async (req, res) => {
  * @swagger
  * /api/messages/lesson/{lessonId}/unread:
  *   get:
- *     summary: Pobiera liczbę nieprzeczytanych wiadomości w lekcji
- *     tags:
- *       - Wiadomości
+ *     summary: Get number of unread messages in a lesson
+ *     tags: [Messages]
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -78,12 +76,12 @@ router.get('/lesson/:lessonId', protect, async (req, res) => {
  *         required: true
  *         schema:
  *           type: integer
- *         description: ID lekcji
+ *         description: Lesson ID
  *     responses:
  *       200:
- *         description: Liczba nieprzeczytanych wiadomości
+ *         description: Count of unread messages
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.get('/lesson/:lessonId/unread', protect, async (req, res) => {
   const { lessonId } = req.params;
@@ -110,9 +108,8 @@ router.get('/lesson/:lessonId/unread', protect, async (req, res) => {
  * @swagger
  * /api/messages/lesson/{lessonId}/read:
  *   put:
- *     summary: Oznacza wiadomości innych użytkowników jako przeczytane
- *     tags:
- *       - Wiadomości
+ *     summary: Mark other users' messages as read
+ *     tags: [Messages]
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -121,12 +118,12 @@ router.get('/lesson/:lessonId/unread', protect, async (req, res) => {
  *         required: true
  *         schema:
  *           type: integer
- *         description: ID lekcji
+ *         description: Lesson ID
  *     responses:
  *       200:
- *         description: Oznaczono jako przeczytane
+ *         description: Messages marked as read
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.put('/lesson/:lessonId/read', protect, async (req, res) => {
   const { lessonId } = req.params;
@@ -152,9 +149,8 @@ router.put('/lesson/:lessonId/read', protect, async (req, res) => {
  * @swagger
  * /api/messages:
  *   post:
- *     summary: Wysyła nową wiadomość do lekcji
- *     tags:
- *       - Wiadomości
+ *     summary: Send a new message to a lesson
+ *     tags: [Messages]
  *     security:
  *       - cookieAuth: []
  *     requestBody:
@@ -169,17 +165,17 @@ router.put('/lesson/:lessonId/read', protect, async (req, res) => {
  *             properties:
  *               lesson_id:
  *                 type: integer
- *                 description: ID lekcji
+ *                 description: Lesson ID
  *               content:
  *                 type: string
- *                 description: Treść wiadomości
+ *                 description: Message text
  *     responses:
  *       201:
- *         description: Wiadomość wysłana
+ *         description: Message sent
  *       400:
- *         description: Błędne dane
+ *         description: Invalid data
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.post('/', protect, async (req, res) => {
   const { lesson_id, content } = req.body;
@@ -204,9 +200,8 @@ router.post('/', protect, async (req, res) => {
  * @swagger
  * /api/messages/{messageId}:
  *   put:
- *     summary: Edytuje wiadomość (tylko autor)
- *     tags:
- *       - Wiadomości
+ *     summary: Edit a message (author only)
+ *     tags: [Messages]
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -215,7 +210,7 @@ router.post('/', protect, async (req, res) => {
  *         required: true
  *         schema:
  *           type: integer
- *         description: ID wiadomości
+ *         description: Message ID
  *     requestBody:
  *       required: true
  *       content:
@@ -225,16 +220,16 @@ router.post('/', protect, async (req, res) => {
  *             properties:
  *               content:
  *                 type: string
- *                 description: Nowa treść
+ *                 description: New message text
  *     responses:
  *       200:
- *         description: Zaktualizowano
+ *         description: Updated successfully
  *       403:
- *         description: Brak uprawnień
+ *         description: Forbidden
  *       404:
- *         description: Nie znaleziono
+ *         description: Not found
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.put('/:messageId', protect, async (req, res) => {
   const { messageId } = req.params;
@@ -265,9 +260,8 @@ router.put('/:messageId', protect, async (req, res) => {
  * @swagger
  * /api/messages/{messageId}:
  *   delete:
- *     summary: Usuwa wiadomość (soft delete)
- *     tags:
- *       - Wiadomości
+ *     summary: Soft delete a message (author only)
+ *     tags: [Messages]
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -276,16 +270,16 @@ router.put('/:messageId', protect, async (req, res) => {
  *         required: true
  *         schema:
  *           type: integer
- *         description: ID wiadomości
+ *         description: Message ID
  *     responses:
  *       200:
- *         description: Usunięto
+ *         description: Deleted successfully
  *       403:
- *         description: Brak uprawnień
+ *         description: Forbidden
  *       404:
- *         description: Nie znaleziono
+ *         description: Not found
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.delete('/:messageId', protect, async (req, res) => {
   const { messageId } = req.params;
@@ -315,16 +309,15 @@ router.delete('/:messageId', protect, async (req, res) => {
  * @swagger
  * /api/messages/notifications:
  *   get:
- *     summary: Pobiera listę nieprzeczytanych wiadomości dla użytkownika (do dzwoneczka)
- *     tags:
- *       - Wiadomości
+ *     summary: Get unread messages for the user (for notification bell)
+ *     tags: [Messages]
  *     security:
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Lista powiadomień
+ *         description: List of unread messages
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.get('/notifications', protect, async (req, res) => {
   const userId = req.user.user_id;

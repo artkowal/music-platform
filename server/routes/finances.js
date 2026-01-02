@@ -9,15 +9,21 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  * @swagger
  * tags:
  *   - name: Finances
- *     description: Statystyki i rozliczenia finansowe
+ *     description: Financial statistics and settlement data for teachers
  */
 
 /**
  * @swagger
  * /api/finances/monthly:
  *   get:
- *     summary: Pobiera miesięczne statystyki dla placówek nauczyciela
- *     tags: [Finances]
+ *     summary: Get monthly financial statistics grouped by workplaces
+ *     description: >
+ *       Returns financial and meeting statistics for all workplaces owned by the authenticated teacher
+ *       for a given month and year.  
+ *       The response includes counts of completed, online, stationary, pending and cancelled meetings,
+ *       together with the workplace payment configuration.
+ *     tags:
+ *       - Finances
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -25,15 +31,63 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  *         name: month
  *         schema:
  *           type: integer
- *         description: Numer miesiąca (1-12)
+ *           minimum: 1
+ *           maximum: 12
+ *         required: false
+ *         description: Month number (1–12). Defaults to the current month.
  *       - in: query
  *         name: year
  *         schema:
  *           type: integer
- *         description: Rok (np. 2024)
+ *         required: false
+ *         description: Year (e.g. 2024). Defaults to the current year.
  *     responses:
  *       200:
- *         description: Statystyki pogrupowane po placówkach
+ *         description: Monthly financial statistics grouped by workplaces.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       workplace_id:
+ *                         type: integer
+ *                       name:
+ *                         type: string
+ *                       color_hex:
+ *                         type: string
+ *                       payment_type:
+ *                         type: string
+ *                         description: Payment calculation type for the workplace (e.g. per lesson, per student).
+ *                       payment_amount:
+ *                         type: number
+ *                       completed_count:
+ *                         type: integer
+ *                         description: Number of completed meetings in the selected month.
+ *                       online_count:
+ *                         type: integer
+ *                         description: Number of completed online meetings.
+ *                       stationary_count:
+ *                         type: integer
+ *                         description: Number of completed stationary (in-person) meetings.
+ *                       pending_count:
+ *                         type: integer
+ *                         description: Number of meetings with status "pending".
+ *                       cancelled_count:
+ *                         type: integer
+ *                         description: Number of cancelled meetings.
+ *       403:
+ *         description: Access denied. Only teachers can view financial statistics.
+ *       401:
+ *         description: User is not authenticated.
+ *       500:
+ *         description: Server error while retrieving financial data.
  */
 router.get('/monthly', protect, async (req, res) => {
   if (req.user.role !== 'teacher') {
