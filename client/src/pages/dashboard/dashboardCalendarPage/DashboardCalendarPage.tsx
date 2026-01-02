@@ -5,15 +5,15 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 
 import { meetingsApi } from "@/api/meetings";
 import { coursesApi } from "@/api/courses";
-import { Button } from "@/components/ui/button";
 import { ScheduleMeetingDialog } from "@/components/dialogs/SheduleMeetingDialog";
 import { MeetingDetailsDialog } from "@/components/dialogs/MeetingDetailsDialog";
 import { TimeOffDialog, type TimeOffData } from "@/components/dialogs/TimeOffDialog";
 import { useAuth } from "@/hooks/useAuth";
 import type { Course } from "@/types/Course";
 import type { Meeting } from "@/types/Meeting";
-import { Loader2, Plus, CalendarOff } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { CalendarToolbar } from "./components/CalendarToolbar";
+import { CalendarHeader } from "./components/CalendarHeader";
 
 import { localizer, messages } from "./config";
 import { getEventStyles, getSlotStyles } from "./utils";
@@ -161,86 +161,69 @@ export default function DashboardCalendarPage() {
   }), [view, events, isTeacher, handleSelectEvent]);
 
   return (
-    <div className="space-y-4 animate-in fade-in">
+    <div className="animate-in fade-in">
       
       {/* CSS do ukrycia domyślnego linku "+X more" */}
       <style>{`
          .rbc-month-view .rbc-show-more { display: none !important; }
       `}</style>
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-            <h2 className="text-3xl font-bold tracking-tight">Kalendarz zajęć</h2>
-            <p className="text-muted-foreground">
-                Zarządzaj swoim grafikiem.
-            </p>
-        </div>
-        
-        <div className="flex items-center gap-3">
-            {isTeacher && (
-                <Button 
-                    variant="ghost" 
-                    onClick={handleCreateTimeOff}
-                    className="text-muted-foreground hover:text-orange-600 hover:bg-orange-50 gap-2 transition-colors"
-                >
-                    <CalendarOff className="h-4 w-4" /> 
-                    <span>Dzień wolny</span>
-                </Button>
-            )}
-            <Button onClick={() => { setSelectedSlotDate(null); setIsCreateOpen(true); }} className="shadow-md">
-                <Plus className="mr-2 h-4 w-4" /> Umów nowe spotkanie
-            </Button>
-        </div>
-      </div>
-
-      <CalendarToolbar 
-        date={date} 
-        view={view} 
-        onNavigate={(action) => {
-            const newDate = new Date(date);
-            if (action === 'TODAY') setDate(new Date());
-            else if (action === 'PREV') setDate(new Date(newDate.setDate(newDate.getDate() - 7))); 
-            else setDate(new Date(newDate.setDate(newDate.getDate() + 7)));
-        }} 
-        onViewChange={(v) => setView(v as View)} 
+      <CalendarHeader 
+        isTeacher={isTeacher}
+        onAddEvent={() => { setSelectedSlotDate(null); setIsCreateOpen(true); }}
+        onAddTimeOff={handleCreateTimeOff}
       />
 
-      <div className="relative min-h-[750px] bg-background rounded-xl border shadow-sm overflow-hidden">
-        {loading && (
-            <div className="absolute inset-0 z-20 bg-background/50 backdrop-blur-sm flex items-center justify-center rounded-xl">
-                <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            </div>
-        )}
-        
-        <Calendar
-            localizer={localizer}
-            events={events}
-            date={date}
-            view={view}
-            onNavigate={setDate}
-            onView={setView}
-            step={60}
-            timeslots={1}
-            min={new Date(0, 0, 0, 7, 0, 0)}
+      <div className="space-y-4 px-2 md:px-0">
+          <CalendarToolbar 
+            date={date} 
+            view={view} 
+            onNavigate={(action) => {
+                const newDate = new Date(date);
+                if (action === 'TODAY') setDate(new Date());
+                else if (action === 'PREV') setDate(new Date(newDate.setDate(newDate.getDate() - 7))); 
+                else setDate(new Date(newDate.setDate(newDate.getDate() + 7)));
+            }} 
+            onViewChange={(v) => setView(v as View)} 
+          />
+
+          <div className="relative min-h-[750px] bg-background rounded-xl border shadow-sm overflow-hidden">
+            {loading && (
+                <div className="absolute inset-0 z-20 bg-background/50 backdrop-blur-sm flex items-center justify-center rounded-xl">
+                    <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                </div>
+            )}
             
-            selectable={true}
-            onSelectSlot={handleSelectSlot}
-            onSelectEvent={handleSelectEvent}
-            
-            eventPropGetter={(e) => getEventStyles(e, view, events, isTeacher)}
-            slotPropGetter={(d) => getSlotStyles(d, events)}
-            
-            components={components}
-            toolbar={false}
-            culture="pl"
-            messages={messages}
-            formats={{
-                eventTimeRangeFormat: ({ start, end }, culture) =>
-                    `${localizer.format(start, 'HH:mm', culture)} - ${localizer.format(end, 'HH:mm', culture)}`,
-                agendaDateFormat: 'd MMMM yyyy (EEEE)', 
-                dayHeaderFormat: 'd MMMM yyyy (EEEE)'
-            }}
-        />
+            <Calendar
+                localizer={localizer}
+                events={events}
+                date={date}
+                view={view}
+                onNavigate={setDate}
+                onView={setView}
+                step={60}
+                timeslots={1}
+                min={new Date(0, 0, 0, 7, 0, 0)}
+                
+                selectable={true}
+                onSelectSlot={handleSelectSlot}
+                onSelectEvent={handleSelectEvent}
+                
+                eventPropGetter={(e) => getEventStyles(e, view, events, isTeacher)}
+                slotPropGetter={(d) => getSlotStyles(d, events)}
+                
+                components={components}
+                toolbar={false}
+                culture="pl"
+                messages={messages}
+                formats={{
+                    eventTimeRangeFormat: ({ start, end }, culture) =>
+                        `${localizer.format(start, 'HH:mm', culture)} - ${localizer.format(end, 'HH:mm', culture)}`,
+                    agendaDateFormat: 'd MMMM yyyy (EEEE)', 
+                    dayHeaderFormat: 'd MMMM yyyy (EEEE)'
+                }}
+            />
+          </div>
       </div>
 
       <ScheduleMeetingDialog 

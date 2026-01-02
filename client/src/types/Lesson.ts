@@ -1,4 +1,15 @@
-import type { Material } from "./Material";
+export interface LessonMaterial {
+  material_id: number;
+  lesson_id: number;
+  title: string;
+  file_path: string;
+}
+
+export interface LessonProgress {
+  is_completed: boolean;
+  time_spent_seconds: number;
+  completed_at?: string | null; 
+}
 
 export interface Lesson {
   lesson_id: number;
@@ -7,11 +18,10 @@ export interface Lesson {
   description?: string;
   duration_minutes: number;
   is_visible: boolean | number;
+  status: 'planned' | 'pending' | 'completed' | 'cancelled';
+  lesson_type: 'stationary' | 'online';
   created_at: string;
-  
-  materials?: Material[];
-  progress?: {
-      is_completed: boolean;
-      time_spent_seconds: number;
-  };
+
+  materials?: LessonMaterial[];
+  progress?: LessonProgress;
 }

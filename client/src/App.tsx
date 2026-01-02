@@ -15,7 +15,7 @@ import MainLayout from "@/components/layouts/MainLayout";
 import DashboardLayout from "@/components/layouts/DashboardLayout";
 import DashboardOverviewPage from "@/pages/dashboard/dashboardOverviewPage/DashboardOverviewPage";
 import DashboardSettingsPage from "@/pages/dashboard/dashboardSettingsPage/DashboardSettingsPage";
-import DashboardAboutPage from "@/pages/dashboard/DashboardAboutPage";
+import DashboardAboutPage from "@/pages/dashboard/dashboardAboutPage/DashboardAboutPage";
 
 import DashboardWorkplacesSettingsPage from "./pages/dashboard/dashboardWorkplacesSettingsPage/DashboardWorkplacesSettingsPage";
 import DashboardWorkplacePage from "./pages/dashboard/dashboardWorkplacePage/DashboardWorkplacePage";
