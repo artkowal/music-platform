@@ -34,7 +34,7 @@ const generateTokenId = async (user) => {
  */
 const createToken = (tokenId) => {
   const payload = { id: tokenId }; 
-  const expiresIn = process.env.JWT_EXPIRE || '15m'; 
+  const expiresIn = process.env.JWT_EXPIRE || '30d'; 
   const jwtSecret = process.env.JWT_SECRET;
 
   if (!jwtSecret) throw new Error('JWT_SECRET nie jest zdefiniowany');
