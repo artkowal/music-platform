@@ -5,7 +5,7 @@ const { createMeeting, getMeetingReport } = require('../services/zoom');
 
 const router = express.Router();
 const { sendNotification } = require('../utils/notifications');
-const dbPool = mysql.createPool(process.env.DATABASE_URL);
+const dbPool = require('../config/db');
 
 const formatToMySQLDateTime = (dateObj) =>
   dateObj.toISOString().slice(0, 19).replace('T', ' ');

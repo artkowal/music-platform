@@ -4,7 +4,7 @@ const { protect } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 const { sendNotification } = require('../utils/notifications');
-const dbPool = mysql.createPool(process.env.DATABASE_URL);
+const dbPool = require('../config/db');
 
 /**
  * @swagger

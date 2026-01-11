@@ -13,7 +13,6 @@ const handleError = (err, req, res, next) => {
     message = 'Ten adres e-mail jest już zajęty.';
   }
 
-  // TODO: Dodać walidator dla hasła
   
   res.status(statusCode).json({
     success: false,

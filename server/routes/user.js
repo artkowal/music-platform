@@ -8,7 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 const { sendEmail } = require('../services/email');
 
 const router = express.Router();
-const dbPool = mysql.createPool(process.env.DATABASE_URL);
+const dbPool = require('../config/db');
 
 /**
  * @swagger

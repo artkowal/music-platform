@@ -7,7 +7,7 @@ const { protect } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 const { sendNotification } = require('../utils/notifications');
-const dbPool = mysql.createPool(process.env.DATABASE_URL);
+const dbPool = require('../config/db');
 
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 
