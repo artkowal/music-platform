@@ -2,25 +2,27 @@ const express = require('express');
 const mysql = require('mysql2/promise');
 const { hashPassword } = require('../utils/password');
 const bcrypt = require('bcryptjs');
-const { sendTokenResponse } = require('../utils/jwt');
+const { sendTokenResponse, deleteJwtCookie } = require('../utils/jwt');
 const { protect } = require('../middlewares/auth.middleware');
+const { v4: uuidv4 } = require('uuid');
+const { sendEmail } = require('../services/email');
 
 const router = express.Router();
-const dbPool = mysql.createPool(process.env.DATABASE_URL);
+const dbPool = require('../config/db');
 
 /**
  * @swagger
  * tags:
  *   - name: User
- *     description: Operacje związane z użytkownikami
+ *     description: User management operations (registration, profile, password, deletion)
  */
 
 /**
  * @swagger
  * /api/user/search:
  *   get:
- *     summary: Wyszukuje uczniów po fragmencie adresu email
- *     description: Zwraca maksymalnie 5 emaili zaczynających się od podanego fragmentu (min. 2 znaki).
+ *     summary: Search students by email fragment
+ *     description: Returns up to 5 email addresses starting with the provided query (minimum 2 characters).
  *     tags: [User]
  *     security:
  *       - cookieAuth: []
@@ -30,10 +32,10 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  *         required: true
  *         schema:
  *           type: string
- *         description: Fragment adresu email
+ *         description: Email fragment to search for
  *     responses:
  *       200:
- *         description: Lista dopasowanych adresów email
+ *         description: List of matching email addresses
  *         content:
  *           application/json:
  *             example:
@@ -66,7 +68,7 @@ router.get('/search', protect, async (req, res) => {
  * @swagger
  * /api/user/register:
  *   post:
- *     summary: Rejestruje nowego użytkownika
+ *     summary: Register a new user
  *     tags: [User]
  *     requestBody:
  *       required: true
@@ -93,11 +95,11 @@ router.get('/search', protect, async (req, res) => {
  *                 type: string
  *     responses:
  *       201:
- *         description: Użytkownik został zarejestrowany
+ *         description: User successfully registered
  *       400:
- *         description: Nieprawidłowe dane lub email już istnieje
+ *         description: Invalid input or email already exists
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.post('/register', async (req, res) => {
   const { email, password, firstName, lastName, role } = req.body;
@@ -144,7 +146,7 @@ router.post('/register', async (req, res) => {
  * @swagger
  * /api/users/profile:
  *   put:
- *     summary: Aktualizuje dane profilowe użytkownika
+ *     summary: Update user profile
  *     tags: [User]
  *     security:
  *       - cookieAuth: []
@@ -161,9 +163,9 @@ router.post('/register', async (req, res) => {
  *                 type: string
  *     responses:
  *       200:
- *         description: Profil został zaktualizowany
+ *         description: Profile updated successfully
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.put('/profile', protect, async (req, res) => {
   const { first_name, last_name } = req.body;
@@ -184,7 +186,7 @@ router.put('/profile', protect, async (req, res) => {
  * @swagger
  * /api/users/password:
  *   put:
- *     summary: Zmienia hasło użytkownika
+ *     summary: Change user password
  *     tags: [User]
  *     security:
  *       - cookieAuth: []
@@ -204,13 +206,13 @@ router.put('/profile', protect, async (req, res) => {
  *                 type: string
  *     responses:
  *       200:
- *         description: Hasło zostało zmienione
+ *         description: Password successfully changed
  *       400:
- *         description: Błędne dane lub za słabe hasło
+ *         description: Invalid input or weak password
  *       404:
- *         description: Użytkownik nie istnieje
+ *         description: User not found
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.put('/password', protect, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
@@ -257,13 +259,63 @@ router.put('/password', protect, async (req, res) => {
 
 /**
  * @swagger
- * /api/users/delete:
- *   delete:
- *     summary: Trwale usuwa konto użytkownika
- *     description: Operacja wymaga podania poprawnego hasła użytkownika.
+ * /api/user/request-delete:
+ *   post:
+ *     summary: Request account deletion
+ *     description: Sends an email with a confirmation link to delete the user's account.
  *     tags: [User]
  *     security:
  *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Confirmation email sent
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: "Email potwierdzający został wysłany."
+ */
+router.post('/request-delete', protect, async (req, res) => {
+  const user = req.user;
+  const token = uuidv4();
+  const expiresAt = new Date(Date.now() + 3600000); // 1h
+
+  await dbPool.execute(
+    'INSERT INTO User_Tokens (token_id, user_id, type, expires_at) VALUES (?, ?, ?, ?)',
+    [token, user.user_id, 'delete_account', expiresAt]
+  );
+
+  const deleteLink = `${process.env.CLIENT_URL}/confirm-delete?token=${token}`;
+  
+  await sendEmail(
+    user.email,
+    'Potwierdzenie usunięcia konta',
+    `<div style="font-family: Arial, sans-serif; padding: 20px;">
+       <h2>Potwierdzenie usunięcia konta</h2>
+       <p>Cześć ${user.first_name},</p>
+       <p>Otrzymaliśmy prośbę o <strong>trwałe usunięcie</strong> Twojego konta w serwisie MusicDesk.</p>
+       <p>Jeśli to nie Ty, zignoruj tę wiadomość. Jeśli chcesz usunąć konto, kliknij poniższy przycisk:</p>
+       <p style="margin: 20px 0;">
+         <a href="${deleteLink}" style="background-color: #ef4444; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+           POTWIERDZAM USUNIĘCIE KONTA
+         </a>
+       </p>
+       <p style="font-size: 12px; color: #666;">Link jest ważny przez 1 godzinę. Ta operacja jest nieodwracalna.</p>
+     </div>`
+  );
+
+  res.json({ success: true, message: 'Email potwierdzający został wysłany.' });
+});
+
+
+
+/**
+ * @swagger
+ * /api/user/confirm-delete:
+ *   post:
+ *     summary: Confirm account deletion
+ *     description: Deletes the user's account if the token is valid.
+ *     tags: [User]
  *     requestBody:
  *       required: true
  *       content:
@@ -271,54 +323,52 @@ router.put('/password', protect, async (req, res) => {
  *           schema:
  *             type: object
  *             required:
- *               - password
+ *               - token
  *             properties:
- *               password:
+ *               token:
  *                 type: string
+ *                 description: Deletion token from email
  *     responses:
  *       200:
- *         description: Konto zostało usunięte
+ *         description: Account successfully deleted
  *       400:
- *         description: Brak hasła
- *       403:
- *         description: Błędne hasło
- *       404:
- *         description: Użytkownik nie istnieje
+ *         description: Invalid or expired token
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
-router.delete('/delete', protect, async (req, res) => {
-  const { password } = req.body;
+router.post('/confirm-delete', async (req, res) => {
+  const { token } = req.body;
 
-  if (!password) {
-    return res.status(400).json({ message: 'Wymagane podanie hasła do potwierdzenia.' });
+  const [tokens] = await dbPool.execute(
+    'SELECT * FROM User_Tokens WHERE token_id = ? AND type = "delete_account" AND expires_at > NOW()',
+    [token]
+  );
+
+  if (tokens.length === 0) {
+    return res.status(400).json({ message: 'Link jest nieprawidłowy lub wygasł.' });
   }
 
+  const userId = tokens[0].user_id;
+
+  const connection = await dbPool.getConnection();
   try {
-    const [users] = await dbPool.execute(
-      'SELECT password_hash FROM Users WHERE user_id = ?',
-      [req.user.user_id]
-    );
+    await connection.beginTransaction();
+    
+    // Usuwamy użytkownika
+    await connection.execute('DELETE FROM Users WHERE user_id = ?', [userId]);
+    
+    await connection.commit();
 
-    if (users.length === 0) return res.status(404).json({ message: 'Użytkownik nie istnieje.' });
+    // Czyścimy ciasteczko od razu po usunięciu konta
+    deleteJwtCookie(res);
 
-    const isMatch = await bcrypt.compare(password, users[0].password_hash);
-    if (!isMatch) {
-      return res.status(403).json({ message: 'Nieprawidłowe hasło.' });
-    }
-
-    await dbPool.execute('DELETE FROM Users WHERE user_id = ?', [req.user.user_id]);
-
-    res.clearCookie('token', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict'
-    });
-
-    res.json({ success: true, message: 'Konto zostało usunięte.' });
-  } catch (error) {
-    console.error("Błąd usuwania konta:", error);
-    res.status(500).json({ message: 'Błąd serwera.' });
+    res.json({ success: true, message: 'Konto zostało pomyślnie usunięte.' });
+  } catch (err) {
+    await connection.rollback();
+    console.error("Błąd usuwania:", err);
+    res.status(500).json({ message: 'Błąd serwera podczas usuwania konta.' });
+  } finally {
+    connection.release();
   }
 });
 

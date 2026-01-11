@@ -3,41 +3,41 @@ const mysql = require('mysql2/promise');
 const { protect } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
-const dbPool = mysql.createPool(process.env.DATABASE_URL);
+const dbPool = require('../config/db');
 
 /**
  * @swagger
  * tags:
  *   - name: Notifications
- *     description: Zarządzanie powiadomieniami użytkownika
+ *     description: User notifications management
  */
 
 /**
  * @swagger
  * /api/notifications:
  *   get:
- *     summary: Pobiera listę powiadomień zalogowanego użytkownika
- *     description: Zwraca maksymalnie 50 ostatnich powiadomień w kolejności od najnowszych.
+ *     summary: Get notifications for the logged-in user
+ *     description: Returns up to 50 latest notifications in descending order.
  *     tags: [Notifications]
  *     security:
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Lista powiadomień użytkownika
+ *         description: User notifications list
  *         content:
  *           application/json:
  *             example:
  *               success: true
  *               data:
  *                 - id: 12
- *                   title: "Nowy uczeń!"
- *                   description: "Jan Kowalski dołączył do kursu"
+ *                   title: "New student!"
+ *                   description: "Jan Kowalski joined the course"
  *                   link: "/dashboard/courses/5"
  *                   type: "info"
  *                   timestamp: "2025-01-15T10:22:00.000Z"
  *                   read: false
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.get('/', protect, async (req, res) => {
   try {
@@ -67,27 +67,27 @@ router.get('/', protect, async (req, res) => {
  * @swagger
  * /api/notifications/{id}/read:
  *   put:
- *     summary: Oznacza konkretne powiadomienie jako przeczytane
+ *     summary: Mark a specific notification as read
  *     tags: [Notifications]
  *     security:
  *       - cookieAuth: []
  *     parameters:
  *       - in: path
  *         name: id
- *         description: ID powiadomienia
  *         required: true
  *         schema:
  *           type: integer
+ *         description: Notification ID
  *         example: 15
  *     responses:
  *       200:
- *         description: Powiadomienie oznaczone jako przeczytane
+ *         description: Notification marked as read
  *         content:
  *           application/json:
  *             example:
  *               success: true
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.put('/:id/read', protect, async (req, res) => {
   try {
@@ -106,19 +106,19 @@ router.put('/:id/read', protect, async (req, res) => {
  * @swagger
  * /api/notifications/read-all:
  *   put:
- *     summary: Oznacza wszystkie powiadomienia użytkownika jako przeczytane
+ *     summary: Mark all notifications of the user as read
  *     tags: [Notifications]
  *     security:
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Wszystkie powiadomienia oznaczone jako przeczytane
+ *         description: All notifications marked as read
  *         content:
  *           application/json:
  *             example:
  *               success: true
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.put('/read-all', protect, async (req, res) => {
   try {

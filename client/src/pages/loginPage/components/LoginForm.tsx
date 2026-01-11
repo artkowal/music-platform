@@ -88,12 +88,12 @@ export function LoginForm() {
                 <FormItem>
                   <div className="flex items-center justify-between">
                     <FormLabel>Hasło</FormLabel>
-                    {/* <Link
+                    <Link
                       to="/forgot-password"
                       className="text-sm font-medium text-primary hover:underline"
                     >
                       Nie pamiętasz hasła?
-                    </Link> */}
+                    </Link>
                   </div>
                   <FormControl>
                     <Input type="password" placeholder="••••••••" {...field} />
@@ -115,7 +115,7 @@ export function LoginForm() {
 
         <div className="mt-4 text-center text-sm">
           Nie masz konta?{" "}
-          <Link to="/register" className="underline font-semibold text-primary">
+          <Link to="/register" replace className="underline font-semibold text-primary">
             Zarejestruj się
           </Link>
         </div>

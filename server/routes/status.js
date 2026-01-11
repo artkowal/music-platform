@@ -1,29 +1,29 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
 const router = express.Router();
-const dbPool = mysql.createPool(process.env.DATABASE_URL);
+const dbPool = require('../config/db');
 
 /**
  * @swagger
  * tags:
  *   - name: Status
- *     description: Sprawdzanie stanu i połączenia API
+ *     description: Check API health and database connection
  */
 
 /**
  * @swagger
  * /api/status:
  *   get:
- *     summary: Sprawdza, czy serwer działa
+ *     summary: Check if the server is running
  *     tags: [Status]
  *     responses:
  *       200:
- *         description: Serwer działa poprawnie.
+ *         description: Server is running properly
  *         content:
  *           text/plain:
  *             schema:
  *               type: string
- *               example: "API serwera MusicDesk działa poprawnie!"
+ *               example: "MusicDesk API server is running properly!"
  */
 router.get('/', (req, res) => {
   res.send('API serwera MusicDesk działa poprawnie!');
@@ -33,11 +33,11 @@ router.get('/', (req, res) => {
  * @swagger
  * /api/status/db-test:
  *   get:
- *     summary: Testuje połączenie z bazą danych
+ *     summary: Test database connection
  *     tags: [Status]
  *     responses:
  *       200:
- *         description: Połączenie z bazą danych powiodło się.
+ *         description: Successfully connected to the database
  *         content:
  *           application/json:
  *             schema:
@@ -50,7 +50,18 @@ router.get('/', (req, res) => {
  *                   type: number
  *                   example: 2
  *       500:
- *         description: Błąd połączenia z bazą danych.
+ *         description: Failed to connect to the database
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Database connection failed!"
+ *                 error:
+ *                   type: string
+ *                   example: "Connection timeout"
  */
 router.get('/db-test', async (req, res) => {
   try {

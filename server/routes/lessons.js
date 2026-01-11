@@ -7,7 +7,7 @@ const { protect } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
 const { sendNotification } = require('../utils/notifications');
-const dbPool = mysql.createPool(process.env.DATABASE_URL);
+const dbPool = require('../config/db');
 
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 
@@ -30,15 +30,21 @@ const upload = multer({ storage });
  * @swagger
  * tags:
  *   - name: Lessons
- *     description: Operacje CRUD oraz materiały i postęp dla lekcji
+ *     description: Lesson management, materials, visibility and student progress tracking
  */
 
 /**
  * @swagger
  * /api/lessons/course/{courseId}:
  *   get:
- *     summary: Pobiera wszystkie lekcje w danym kursie (wraz z Zoom, materiałami, potwierdzeniami i postępem)
- *     tags: [Lessons]
+ *     summary: Get all lessons for a course with materials, Zoom meetings and progress
+ *     description: >
+ *       Returns a full list of lessons for the selected course.  
+ *       The response includes Zoom meeting links, attached learning materials,
+ *       confirmation status (teacher & student) and lesson progress for the current student.
+ *       Students only see visible or cancelled lessons, while teachers see all.
+ *     tags:
+ *       - Lessons
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -47,10 +53,14 @@ const upload = multer({ storage });
  *         required: true
  *         schema:
  *           type: integer
- *         description: ID kursu
+ *         description: Course ID
  *     responses:
  *       200:
- *         description: Lista lekcji
+ *         description: List of lessons with materials, confirmations and progress.
+ *       401:
+ *         description: User is not authenticated.
+ *       500:
+ *         description: Server error while loading lessons.
  */
 router.get('/course/:courseId', protect, async (req, res) => {
   try {
@@ -123,8 +133,13 @@ router.get('/course/:courseId', protect, async (req, res) => {
  * @swagger
  * /api/lessons:
  *   post:
- *     summary: Tworzy nową lekcję (stacjonarną) z materiałami
- *     tags: [Lessons]
+ *     summary: Create a new stationary lesson with materials
+ *     description: >
+ *       Creates a new stationary lesson in a course and optionally uploads learning materials.
+ *       All students enrolled in the course are notified about the new lesson.
+ *       Only teachers are allowed to perform this action.
+ *     tags:
+ *       - Lessons
  *     security:
  *       - cookieAuth: []
  *     requestBody:
@@ -133,6 +148,9 @@ router.get('/course/:courseId', protect, async (req, res) => {
  *         multipart/form-data:
  *           schema:
  *             type: object
+ *             required:
+ *               - course_id
+ *               - title
  *             properties:
  *               course_id:
  *                 type: integer
@@ -142,6 +160,7 @@ router.get('/course/:courseId', protect, async (req, res) => {
  *                 type: string
  *               duration_minutes:
  *                 type: integer
+ *                 example: 45
  *               is_visible:
  *                 type: boolean
  *               files:
@@ -151,9 +170,11 @@ router.get('/course/:courseId', protect, async (req, res) => {
  *                   format: binary
  *     responses:
  *       201:
- *         description: Lekcja utworzona
+ *         description: Lesson successfully created.
  *       403:
- *         description: Brak uprawnień
+ *         description: Only teachers can create lessons.
+ *       500:
+ *         description: Server error while creating lesson.
  */
 router.post('/', protect, upload.array('files'), async (req, res) => {
   if (req.user.role !== 'teacher') {
@@ -232,8 +253,12 @@ router.post('/', protect, upload.array('files'), async (req, res) => {
  * @swagger
  * /api/lessons/{id}:
  *   put:
- *     summary: Aktualizuje dane lekcji
- *     tags: [Lessons]
+ *     summary: Update lesson details
+ *     description: >
+ *       Updates lesson metadata such as title, description, duration and visibility.
+ *       Only teachers are allowed to update lessons.
+ *     tags:
+ *       - Lessons
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -242,6 +267,7 @@ router.post('/', protect, upload.array('files'), async (req, res) => {
  *         required: true
  *         schema:
  *           type: integer
+ *         description: Lesson ID
  *     requestBody:
  *       required: true
  *       content:
@@ -259,9 +285,11 @@ router.post('/', protect, upload.array('files'), async (req, res) => {
  *                 type: boolean
  *     responses:
  *       200:
- *         description: Zaktualizowano lekcję
+ *         description: Lesson successfully updated.
  *       403:
- *         description: Brak uprawnień
+ *         description: Only teachers can update lessons.
+ *       500:
+ *         description: Server error while updating lesson.
  */
 router.put('/:id', protect, async (req, res) => {
   if (req.user.role !== 'teacher') {
@@ -294,8 +322,10 @@ router.put('/:id', protect, async (req, res) => {
  * @swagger
  * /api/lessons/{id}:
  *   delete:
- *     summary: Usuwa lekcję
- *     tags: [Lessons]
+ *     summary: Delete a lesson
+ *     description: Permanently removes a lesson from the system. Only teachers are allowed to delete lessons.
+ *     tags:
+ *       - Lessons
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -304,11 +334,14 @@ router.put('/:id', protect, async (req, res) => {
  *         required: true
  *         schema:
  *           type: integer
+ *         description: Lesson ID
  *     responses:
  *       200:
- *         description: Lekcja usunięta
+ *         description: Lesson successfully deleted.
  *       403:
- *         description: Brak uprawnień
+ *         description: Only teachers can delete lessons.
+ *       500:
+ *         description: Server error while deleting lesson.
  */
 router.delete('/:id', protect, async (req, res) => {
   if (req.user.role !== 'teacher') {
@@ -332,8 +365,10 @@ router.delete('/:id', protect, async (req, res) => {
  * @swagger
  * /api/lessons/{id}/materials:
  *   post:
- *     summary: Dodaje materiały do istniejącej lekcji
- *     tags: [Lessons]
+ *     summary: Upload materials to an existing lesson
+ *     description: Adds one or more files to a lesson. Only teachers are allowed to upload materials.
+ *     tags:
+ *       - Lessons
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -342,6 +377,7 @@ router.delete('/:id', protect, async (req, res) => {
  *         required: true
  *         schema:
  *           type: integer
+ *         description: Lesson ID
  *     requestBody:
  *       required: true
  *       content:
@@ -356,7 +392,11 @@ router.delete('/:id', protect, async (req, res) => {
  *                   format: binary
  *     responses:
  *       200:
- *         description: Materiały dodane
+ *         description: Materials successfully uploaded.
+ *       403:
+ *         description: Only teachers can upload materials.
+ *       500:
+ *         description: Server error while uploading files.
  */
 router.post('/:id/materials', protect, upload.array('files'), async (req, res) => {
   if (req.user.role !== 'teacher') {
@@ -390,8 +430,10 @@ router.post('/:id/materials', protect, upload.array('files'), async (req, res) =
  * @swagger
  * /api/lessons/{id}/materials/{materialId}:
  *   delete:
- *     summary: Usuwa pojedynczy materiał
- *     tags: [Lessons]
+ *     summary: Delete a lesson material
+ *     description: Removes a single uploaded file from a lesson and deletes it from the server.
+ *     tags:
+ *       - Lessons
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -400,16 +442,22 @@ router.post('/:id/materials', protect, upload.array('files'), async (req, res) =
  *         required: true
  *         schema:
  *           type: integer
+ *         description: Lesson ID
  *       - in: path
  *         name: materialId
  *         required: true
  *         schema:
  *           type: integer
+ *         description: Material ID
  *     responses:
  *       200:
- *         description: Materiał usunięty
+ *         description: Material successfully deleted.
  *       404:
- *         description: Nie znaleziono materiału
+ *         description: Material not found.
+ *       403:
+ *         description: Only teachers can delete materials.
+ *       500:
+ *         description: Server error while deleting material.
  */
 router.delete('/:id/materials/:materialId', protect, async (req, res) => {
   if (req.user.role !== 'teacher') {
@@ -450,8 +498,13 @@ router.delete('/:id/materials/:materialId', protect, async (req, res) => {
  * @swagger
  * /api/lessons/{id}/progress:
  *   post:
- *     summary: Aktualizuje postęp ucznia w lekcji
- *     tags: [Lessons]
+ *     summary: Update student lesson progress
+ *     description: >
+ *       Saves or updates the student's progress for a lesson including time spent
+ *       and completion status.  
+ *       When a lesson is marked as completed, the teacher is notified.
+ *     tags:
+ *       - Lessons
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -460,6 +513,7 @@ router.delete('/:id/materials/:materialId', protect, async (req, res) => {
  *         required: true
  *         schema:
  *           type: integer
+ *         description: Lesson ID
  *     requestBody:
  *       required: true
  *       content:
@@ -469,11 +523,17 @@ router.delete('/:id/materials/:materialId', protect, async (req, res) => {
  *             properties:
  *               time_spent:
  *                 type: integer
+ *                 description: Time spent on the lesson in seconds.
  *               is_completed:
  *                 type: boolean
+ *                 description: Whether the lesson has been completed.
  *     responses:
  *       200:
- *         description: Postęp zapisany
+ *         description: Progress successfully saved.
+ *       401:
+ *         description: User is not authenticated.
+ *       500:
+ *         description: Server error while saving progress.
  */
 router.post('/:id/progress', protect, async (req, res) => {
   const { time_spent, is_completed } = req.body;

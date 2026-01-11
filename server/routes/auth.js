@@ -1,11 +1,22 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
-const { comparePassword } = require('../utils/password');
+const { v4: uuidv4 } = require('uuid');
+const { comparePassword, hashPassword } = require('../utils/password');
 const { sendTokenResponse, deleteJwtCookie } = require('../utils/jwt');
 const { protect } = require('../middlewares/auth.middleware');
+const { sendEmail } = require('../services/email');
 
 const router = express.Router();
-const dbPool = mysql.createPool(process.env.DATABASE_URL);
+// const dbPool = mysql.createPool(process.env.DATABASE_URL);
+const dbPool = require('../config/db');
+
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Auth
+ *     description: User authentication, sessions and password recovery
+ */
 
 /**
  * @swagger
@@ -39,9 +50,10 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  * @swagger
  * /api/auth/login:
  *   post:
- *     summary: Loguje użytkownika
- *     description: Sprawdza dane logowania i generuje token sesji.
- *     tags: [Auth]
+ *     summary: Log in user
+ *     description: Verifies credentials and creates a new session token stored in an HttpOnly cookie.
+ *     tags:
+ *       - Auth
  *     requestBody:
  *       required: true
  *       content:
@@ -54,17 +66,17 @@ const dbPool = mysql.createPool(process.env.DATABASE_URL);
  *             properties:
  *               email:
  *                 type: string
- *                 example: "nauczyciel@example.com"
+ *                 example: teacher@example.com
  *               password:
  *                 type: string
- *                 example: "password123"
+ *                 example: password123
  *     responses:
  *       200:
- *         description: Pomyślnie zalogowano. Token zwrócony w ciasteczku HttpOnly.
+ *         description: User successfully logged in. Session token is set in HttpOnly cookie.
  *       400:
- *         description: Brak wymaganych danych.
+ *         description: Email or password not provided.
  *       401:
- *         description: Nieprawidłowy email lub hasło.
+ *         description: Invalid email or password.
  */
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
@@ -92,13 +104,15 @@ router.post('/login', async (req, res) => {
  * @swagger
  * /api/auth/logout:
  *   post:
- *     summary: Wylogowuje użytkownika (unieważnia BIEŻĄCY token)
- *     tags: [Auth]
+ *     summary: Log out user
+ *     description: Invalidates the current session token and removes the authentication cookie.
+ *     tags:
+ *       - Auth
  *     security:
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Pomyślnie wylogowano (usuwa token sesji z DB i czyści ciasteczko).
+ *         description: User successfully logged out.
  */
 router.post('/logout', protect, async (req, res) => {
   await dbPool.execute('DELETE FROM User_Tokens WHERE token_id = ?', [req.tokenId]);
@@ -110,13 +124,15 @@ router.post('/logout', protect, async (req, res) => {
  * @swagger
  * /api/auth/check:
  *   get:
- *     summary: Sprawdza aktualną sesję użytkownika
- *     tags: [Auth]
+ *     summary: Get current authenticated user
+ *     description: Returns the currently logged-in user based on the session cookie.
+ *     tags:
+ *       - Auth
  *     security:
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Zwraca dane zalogowanego użytkownika.
+ *         description: Authenticated user data.
  *         content:
  *           application/json:
  *             schema:
@@ -132,6 +148,123 @@ router.get('/check', protect, (req, res) => {
     success: true,
     user: req.user,
   });
+});
+
+/**
+ * @swagger
+ * /api/auth/forgot-password:
+ *   post:
+ *     summary: Request password reset
+ *     description: Generates a password reset token and sends it to the user via email.
+ *     tags:
+ *       - Auth
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: student@example.com
+ *     responses:
+ *       200:
+ *         description: Password reset email has been sent.
+ *       404:
+ *         description: User not found.
+ */
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+
+  const [users] = await dbPool.execute('SELECT user_id, first_name FROM Users WHERE email = ?', [email]);
+  if (users.length === 0) {
+    return res.status(404).json({ message: 'Użytkownik nie istnieje' });
+  }
+
+  const user = users[0];
+  const token = uuidv4();
+  const expiresAt = new Date(Date.now() + 3600000);
+
+  await dbPool.execute(
+    'INSERT INTO User_Tokens (token_id, user_id, type, expires_at) VALUES (?, ?, ?, ?)',
+    [token, user.user_id, 'reset_password', expiresAt]
+  );
+
+  const resetLink = `${process.env.CLIENT_URL}/reset-password?token=${token}`;
+  await sendEmail(
+    email,
+    'Password Reset',
+    `<p>Hello ${user.first_name},</p>
+     <p>You requested a password reset.</p>
+     <p>Click the link below to set a new password:</p>
+     <a href="${resetLink}">Reset password</a>
+     <p>This link expires in 1 hour.</p>`
+  );
+
+  res.json({ success: true, message: 'Email z linkiem został wysłany.' });
+});
+
+/**
+ * @swagger
+ * /api/auth/reset-password:
+ *   post:
+ *     summary: Reset user password
+ *     description: Sets a new password using a valid password reset token.
+ *     tags:
+ *       - Auth
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *               - newPassword
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 description: Password reset token received via email.
+ *               newPassword:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Password successfully changed.
+ *       400:
+ *         description: Token is invalid or expired.
+ */
+router.post('/reset-password', async (req, res) => {
+  const { token, newPassword } = req.body;
+
+  const [tokens] = await dbPool.execute(
+    'SELECT * FROM User_Tokens WHERE token_id = ? AND type = "reset_password" AND expires_at > NOW()',
+    [token]
+  );
+
+  if (tokens.length === 0) {
+    return res.status(400).json({ message: 'Token jest nieprawidłowy lub wygasł.' });
+  }
+
+  const userId = tokens[0].user_id;
+  const hashedPassword = await hashPassword(newPassword);
+
+  const connection = await dbPool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.execute('UPDATE Users SET password_hash = ? WHERE user_id = ?', [hashedPassword, userId]);
+    await connection.execute('DELETE FROM User_Tokens WHERE token_id = ?', [token]);
+    await connection.commit();
+    res.json({ success: true, message: 'Hasło zostało zmienione.' });
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
 });
 
 module.exports = router;

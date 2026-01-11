@@ -3,28 +3,112 @@ const mysql = require('mysql2/promise');
 const { protect } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
-const dbPool = mysql.createPool(process.env.DATABASE_URL);
+const dbPool = require('../config/db');
 
 /**
  * @swagger
  * tags:
  *   - name: Dashboard
- *     description: Dane do pulpitu głównego
+ *     description: User dashboard data including statistics, upcoming meetings and pending lessons
  */
 
 /**
  * @swagger
  * /api/dashboard:
  *   get:
- *     summary: Pobiera statystyki i nadchodzące spotkania
- *     tags: [Dashboard]
+ *     summary: Get dashboard data for the current user
+ *     description: >
+ *       Returns dashboard statistics and upcoming meetings for the authenticated user.
+ *       The returned data depends on the user role:
+ *       - Teachers receive course and student statistics and their upcoming meetings.
+ *       - Students receive enrolled course count, upcoming meetings and lessons that are not yet completed.
+ *     tags:
+ *       - Dashboard
  *     security:
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Dane pulpitu
+ *         description: Dashboard data successfully retrieved.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     stats:
+ *                       type: object
+ *                       properties:
+ *                         coursesCount:
+ *                           type: integer
+ *                           description: Number of courses taught by the teacher or enrolled by the student.
+ *                         studentsCount:
+ *                           type: integer
+ *                           description: Number of unique students (teachers only).
+ *                         upcomingCount:
+ *                           type: integer
+ *                           description: Number of upcoming planned meetings.
+ *                         toCompleteCount:
+ *                           type: integer
+ *                           description: Number of lessons not yet completed by the student (students only).
+ *                     upcomingMeetings:
+ *                       type: array
+ *                       description: List of upcoming planned meetings.
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           meeting_id:
+ *                             type: integer
+ *                           title:
+ *                             type: string
+ *                           scheduled_time:
+ *                             type: string
+ *                             format: date-time
+ *                           duration_minutes:
+ *                             type: integer
+ *                           type:
+ *                             type: string
+ *                           status:
+ *                             type: string
+ *                           zoom_join_url:
+ *                             type: string
+ *                           zoom_start_url:
+ *                             type: string
+ *                           course_id:
+ *                             type: integer
+ *                           course_title:
+ *                             type: string
+ *                           workplace_name:
+ *                             type: string
+ *                           workplace_color:
+ *                             type: string
+ *                           teacher_name:
+ *                             type: string
+ *                           teacher_lastname:
+ *                             type: string
+ *                     lessonsToComplete:
+ *                       type: array
+ *                       description: List of visible lessons not yet completed by the student.
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           lesson_id:
+ *                             type: integer
+ *                           title:
+ *                             type: string
+ *                           duration_minutes:
+ *                             type: integer
+ *                           course_id:
+ *                             type: integer
+ *                           course_title:
+ *                             type: string
+ *       401:
+ *         description: User is not authenticated.
  *       500:
- *         description: Błąd serwera
+ *         description: Failed to load dashboard data due to a server error.
  */
 router.get('/', protect, async (req, res) => {
   const userId = req.user.user_id;

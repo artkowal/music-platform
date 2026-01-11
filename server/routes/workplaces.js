@@ -3,26 +3,26 @@ const mysql = require('mysql2/promise');
 const { protect } = require('../middlewares/auth.middleware');
 const router = express.Router();
 
-const dbPool = mysql.createPool(process.env.DATABASE_URL);
+const dbPool = require('../config/db');
 
 /**
  * @swagger
  * tags:
  *   - name: Workplaces
- *     description: Zarządzanie placówkami (szkołami)
+ *     description: Manage teacher's workplaces (schools)
  */
 
 /**
  * @swagger
  * /api/workplaces:
  *   get:
- *     summary: Pobiera listę placówek zalogowanego nauczyciela
+ *     summary: Get a list of the logged-in teacher's workplaces
  *     tags: [Workplaces]
  *     security:
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Lista placówek
+ *         description: Array of workplaces
  *         content:
  *           application/json:
  *             schema:
@@ -48,7 +48,7 @@ router.get('/', protect, async (req, res) => {
  * @swagger
  * /api/workplaces:
  *   post:
- *     summary: Tworzy nową placówkę
+ *     summary: Create a new workplace
  *     tags: [Workplaces]
  *     security:
  *       - cookieAuth: []
@@ -65,16 +65,20 @@ router.get('/', protect, async (req, res) => {
  *                 type: string
  *               color_hex:
  *                 type: string
+ *                 description: Hex color for workplace label
  *               payment_type:
  *                 type: string
  *                 enum: [per_lesson, monthly, none]
  *               payment_amount:
  *                 type: number
+ *                 description: Amount for payment if applicable
  *     responses:
  *       201:
- *         description: Placówka utworzona
+ *         description: Workplace created successfully
  *       400:
- *         description: Nieprawidłowe dane
+ *         description: Invalid input
+ *       500:
+ *         description: Server error
  */
 router.post('/', protect, async (req, res) => {
   const { name, color_hex, payment_type, payment_amount } = req.body;
@@ -102,7 +106,7 @@ router.post('/', protect, async (req, res) => {
  * @swagger
  * /api/workplaces/reorder/all:
  *   put:
- *     summary: Aktualizuje kolejność wszystkich placówek (Drag & Drop)
+ *     summary: Update the order of all workplaces (Drag & Drop)
  *     tags: [Workplaces]
  *     security:
  *       - cookieAuth: []
@@ -124,9 +128,11 @@ router.post('/', protect, async (req, res) => {
  *                       type: integer
  *     responses:
  *       200:
- *         description: Kolejność zaktualizowana
+ *         description: Order updated successfully
  *       400:
- *         description: Nieprawidłowe dane
+ *         description: Invalid input
+ *       500:
+ *         description: Server error
  */
 router.put('/reorder/all', protect, async (req, res) => {
   const { items } = req.body;
@@ -162,7 +168,7 @@ router.put('/reorder/all', protect, async (req, res) => {
  * @swagger
  * /api/workplaces/{id}:
  *   get:
- *     summary: Pobiera szczegóły jednej placówki
+ *     summary: Get details of a single workplace
  *     tags: [Workplaces]
  *     security:
  *       - cookieAuth: []
@@ -174,9 +180,9 @@ router.put('/reorder/all', protect, async (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Szczegóły placówki
+ *         description: Workplace details
  *       404:
- *         description: Nie znaleziono
+ *         description: Workplace not found
  */
 router.get('/:id', protect, async (req, res) => {
   const [rows] = await dbPool.execute(
@@ -195,7 +201,7 @@ router.get('/:id', protect, async (req, res) => {
  * @swagger
  * /api/workplaces/{id}:
  *   put:
- *     summary: Aktualizuje nazwę placówki
+ *     summary: Update the name of a workplace
  *     tags: [Workplaces]
  *     security:
  *       - cookieAuth: []
@@ -218,11 +224,13 @@ router.get('/:id', protect, async (req, res) => {
  *                 type: string
  *     responses:
  *       200:
- *         description: Zaktualizowano placówkę
- *       404:
- *         description: Nie znaleziono
+ *         description: Workplace updated successfully
  *       400:
- *         description: Nieprawidłowe dane
+ *         description: Invalid input
+ *       404:
+ *         description: Workplace not found or no permission
+ *       500:
+ *         description: Server error
  */
 router.put('/:id', protect, async (req, res) => {
   const { name } = req.body;
@@ -245,7 +253,7 @@ router.put('/:id', protect, async (req, res) => {
  * @swagger
  * /api/workplaces/{id}:
  *   delete:
- *     summary: Usuwa placówkę
+ *     summary: Delete a workplace
  *     tags: [Workplaces]
  *     security:
  *       - cookieAuth: []
@@ -257,9 +265,11 @@ router.put('/:id', protect, async (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Placówka usunięta
+ *         description: Workplace deleted successfully
  *       404:
- *         description: Nie znaleziono
+ *         description: Workplace not found or no permission
+ *       500:
+ *         description: Server error
  */
 router.delete('/:id', protect, async (req, res) => {
   const [result] = await dbPool.execute(

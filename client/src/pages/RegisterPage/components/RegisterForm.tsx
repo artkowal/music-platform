@@ -7,7 +7,6 @@ import * as z from "zod";
 import { useAuth } from "@/hooks/useAuth";
 import { Check } from "lucide-react";
 
-// Komponenty UI
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -28,9 +27,9 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-// Twoje zasoby
 import registerImage from "@/assets/images/register_image.webp";
 import logo from "@/assets/logo.png";
+
 
 // Regex do hasła
 const passwordRegex = /(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9])(?=.{8,})/;
@@ -250,7 +249,7 @@ export function RegisterForm({ className, ...props }: RegisterFormProps) {
                 
                 <div className="text-center text-sm text-muted-foreground">
                   Masz już konto?{" "}
-                  <Link to="/login" className="font-semibold text-primary hover:underline">
+                  <Link to="/login" replace className="font-semibold text-primary hover:underline">
                     Zaloguj się
                   </Link>
                 </div>

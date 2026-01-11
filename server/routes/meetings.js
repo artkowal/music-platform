@@ -5,7 +5,7 @@ const { createMeeting, getMeetingReport } = require('../services/zoom');
 
 const router = express.Router();
 const { sendNotification } = require('../utils/notifications');
-const dbPool = mysql.createPool(process.env.DATABASE_URL);
+const dbPool = require('../config/db');
 
 const formatToMySQLDateTime = (dateObj) =>
   dateObj.toISOString().slice(0, 19).replace('T', ' ');
@@ -23,9 +23,20 @@ const autoCompleteStationaryLessons = async (connection) => {
 
 /**
  * @swagger
+ * tags:
+ *   - name: Meetings
+ *     description: Lesson scheduling, Zoom meetings, calendar, confirmations and availability
+ */
+
+/**
+ * @swagger
  * /api/meetings/calendar:
  *   get:
- *     summary: Pobiera spotkania użytkownika w podanym zakresie dat
+ *     summary: Get user calendar (lessons and teacher time off)
+ *     description: |
+ *       Returns all lessons scheduled for the authenticated user within a given date range.
+ *       Teachers also receive their time-off blocks.
+ *       Stationary lessons that already ended are automatically marked as completed.
  *     tags: [Meetings]
  *     security:
  *       - cookieAuth: []
@@ -35,18 +46,18 @@ const autoCompleteStationaryLessons = async (connection) => {
  *         schema:
  *           type: string
  *           format: date-time
- *         description: Początek zakresu dat
+ *         description: Start date of the range (default = 30 days back)
  *       - in: query
  *         name: end
  *         schema:
  *           type: string
  *           format: date-time
- *         description: Koniec zakresu dat
+ *         description: End date of the range (default = 30 days forward)
  *     responses:
  *       200:
- *         description: Lista spotkań użytkownika
+ *         description: Calendar events (lessons and time-off blocks)
  *       500:
- *         description: Błąd podczas pobierania danych
+ *         description: Calendar loading failed
  */
 router.get('/calendar', protect, async (req, res) => {
   const { start, end } = req.query;
@@ -126,7 +137,12 @@ router.get('/calendar', protect, async (req, res) => {
  * @swagger
  * /api/meetings/schedule:
  *   post:
- *     summary: Tworzy jedno lub wiele zaplanowanych spotkań
+ *     summary: Schedule one or multiple lessons (with optional Zoom)
+ *     description: |
+ *       Creates one or more lesson meetings for a course.
+ *       Prevents time conflicts for teachers and students.
+ *       Online lessons automatically create Zoom meetings.
+ *       Notifications are sent to the other party.
  *     tags: [Meetings]
  *     security:
  *       - cookieAuth: []
@@ -159,14 +175,14 @@ router.get('/calendar', protect, async (req, res) => {
  *                 enum: [online, stationary]
  *               repeat_weeks:
  *                 type: integer
- *                 description: Ile tygodni powtarzać spotkanie
+ *                 description: Number of weeks to repeat this lesson
  *     responses:
  *       201:
- *         description: Utworzono spotkania
+ *         description: Meetings successfully scheduled
  *       403:
- *         description: Brak dostępu
+ *         description: No access to the course
  *       409:
- *         description: Konflikt terminów
+ *         description: Time conflict detected
  */
 router.post('/schedule', protect, async (req, res) => {
   const {
@@ -319,7 +335,7 @@ router.post('/schedule', protect, async (req, res) => {
  * @swagger
  * /api/meetings/course/{courseId}:
  *   get:
- *     summary: Pobiera listę spotkań kursu
+ *     summary: Get all meetings for a course
  *     tags: [Meetings]
  *     security:
  *       - cookieAuth: []
@@ -331,9 +347,9 @@ router.post('/schedule', protect, async (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Lista spotkań kursu
+ *         description: List of course meetings
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.get('/course/:courseId', protect, async (req, res) => {
   const { courseId } = req.params;
@@ -354,7 +370,7 @@ router.get('/course/:courseId', protect, async (req, res) => {
  * @swagger
  * /api/meetings/{id}/start-early:
  *   patch:
- *     summary: Oznacza wcześniejsze rozpoczęcie lekcji (nauczyciel)
+ *     summary: Mark lesson as started early (teacher)
  *     tags: [Meetings]
  *     security:
  *       - cookieAuth: []
@@ -366,9 +382,9 @@ router.get('/course/:courseId', protect, async (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Zaktualizowano dane spotkania
+ *         description: Meeting updated
  *       403:
- *         description: Brak uprawnień
+ *         description: Access denied
  */
 router.patch('/:id/start-early', protect, async (req, res) => {
   if (req.user.role !== 'teacher')
@@ -409,7 +425,7 @@ router.patch('/:id/start-early', protect, async (req, res) => {
  * @swagger
  * /api/meetings/{id}/finish:
  *   patch:
- *     summary: Zamyka lekcję i ustawia status pending
+ *     summary: Finish a lesson and set status to pending
  *     tags: [Meetings]
  *     security:
  *       - cookieAuth: []
@@ -421,9 +437,9 @@ router.patch('/:id/start-early', protect, async (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Spotkanie zakończone
+ *         description: Meeting finished
  *       403:
- *         description: Brak uprawnień
+ *         description: Access denied
  */
 router.patch('/:id/finish', protect, async (req, res) => {
   if (req.user.role !== 'teacher')
@@ -449,7 +465,7 @@ router.patch('/:id/finish', protect, async (req, res) => {
  * @swagger
  * /api/meetings/{id}/confirm:
  *   patch:
- *     summary: Potwierdza uczestnictwo w lekcji
+ *     summary: Confirm lesson attendance
  *     tags: [Meetings]
  *     security:
  *       - cookieAuth: []
@@ -461,7 +477,7 @@ router.patch('/:id/finish', protect, async (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Zapisano potwierdzenie
+ *         description: Confirmation saved
  */
 router.patch('/:id/confirm', protect, async (req, res) => {
   const { id } = req.params;
@@ -487,7 +503,7 @@ router.patch('/:id/confirm', protect, async (req, res) => {
  * @swagger
  * /api/meetings/{id}/cancel:
  *   patch:
- *     summary: Anuluje spotkanie
+ *     summary: Cancel a meeting
  *     tags: [Meetings]
  *     security:
  *       - cookieAuth: []
@@ -499,7 +515,7 @@ router.patch('/:id/confirm', protect, async (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Spotkanie anulowane
+ *         description: Meeting cancelled
  */
 router.patch('/:id/cancel', protect, async (req, res) => {
   const role = req.user.role;
@@ -571,7 +587,7 @@ async function checkCompletion(meetingId, pool) {
  * @swagger
  * /api/meetings/{id}/report:
  *   get:
- *     summary: Pobiera raport Zoom lub lokalny raport spotkania
+ *     summary: Get Zoom or local meeting report
  *     tags: [Meetings]
  *     security:
  *       - cookieAuth: []
@@ -583,9 +599,9 @@ async function checkCompletion(meetingId, pool) {
  *           type: integer
  *     responses:
  *       200:
- *         description: Raport spotkania
+ *         description: Meeting report
  *       404:
- *         description: Nie znaleziono raportu
+ *         description: Report not found
  */
 router.get('/:id/report', protect, async (req, res) => {
   const { id } = req.params;
@@ -623,7 +639,7 @@ router.get('/:id/report', protect, async (req, res) => {
  * @swagger
  * /api/meetings/{id}/zoom-report:
  *   get:
- *     summary: Wymusza pobranie najnowszego raportu Zoom
+ *     summary: Force fetch latest Zoom report
  *     tags: [Meetings]
  *     security:
  *       - cookieAuth: []
@@ -635,9 +651,9 @@ router.get('/:id/report', protect, async (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Zwraca najnowszy raport
+ *         description: Latest Zoom report
  *       404:
- *         description: Brak raportu lub ID
+ *         description: No Zoom report or meeting ID
  */
 router.get('/:id/zoom-report', protect, async (req, res) => {
   const { id } = req.params;
@@ -666,7 +682,7 @@ router.get('/:id/zoom-report', protect, async (req, res) => {
  * @swagger
  * /api/meetings/availability:
  *   get:
- *     summary: Pobiera zajęte sloty nauczyciela dla danego dnia
+ *     summary: Get busy time slots for a given day
  *     tags: [Meetings]
  *     security:
  *       - cookieAuth: []
@@ -684,9 +700,9 @@ router.get('/:id/zoom-report', protect, async (req, res) => {
  *           format: date
  *     responses:
  *       200:
- *         description: Lista zajętych terminów
+ *         description: List of busy time slots
  *       400:
- *         description: Brak parametrów
+ *         description: Missing required parameters
  */
 router.get('/availability', protect, async (req, res) => {
   const { course_id, date } = req.query;
@@ -799,15 +815,15 @@ router.get('/availability', protect, async (req, res) => {
  * @swagger
  * /api/meetings/unconfirmed:
  *   get:
- *     summary: Zwraca najbliższe niepotwierdzone spotkanie ucznia
+ *     summary: Get the nearest unconfirmed student meeting
  *     tags: [Meetings]
  *     security:
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Zwraca najbliższe spotkanie w statusie pending, oczekujące na potwierdzenie ucznia
+ *         description: Nearest pending meeting waiting for student confirmation
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.get('/unconfirmed', protect, async (req, res) => {
   if (req.user.role === 'teacher') return res.json({ meeting: null });
@@ -845,7 +861,7 @@ router.get('/unconfirmed', protect, async (req, res) => {
  * @swagger
  * /api/meetings/{id}/dispute:
  *   post:
- *     summary: Zgłasza spór dotyczący lekcji przez ucznia (lekcja rzekomo się nie odbyła)
+ *     summary: Submit a dispute about a lesson (student claims it did not take place)
  *     tags: [Meetings]
  *     security:
  *       - cookieAuth: []
@@ -855,14 +871,13 @@ router.get('/unconfirmed', protect, async (req, res) => {
  *         required: true
  *         schema:
  *           type: integer
- *         description: ID spotkania
  *     responses:
  *       200:
- *         description: Zgłoszono spór
+ *         description: Dispute submitted
  *       403:
- *         description: Brak uprawnień
+ *         description: Access denied
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
 router.post('/:id/dispute', protect, async (req, res) => {
     const meetingId = req.params.id;
@@ -895,10 +910,10 @@ router.post('/:id/dispute', protect, async (req, res) => {
  * @swagger
  * /api/meetings/time-off:
  *   post:
- *     summary: Dodaje nową niedostępność nauczyciela
+ *     summary: Create a teacher time-off entry
  *     description: |
- *       Tworzy wpis o niedostępności nauczyciela (dzień wolny lub zakres godzin).
- *       Dostępne tylko dla użytkowników z rolą **teacher**.
+ *       Creates a teacher unavailability entry (full day or time range).
+ *       Only available for users with the **teacher** role.
  *     tags: [Meetings]
  *     security:
  *       - cookieAuth: []
@@ -915,42 +930,23 @@ router.post('/:id/dispute', protect, async (req, res) => {
  *               start_time:
  *                 type: string
  *                 format: date-time
- *                 description: Początek okresu niedostępności
- *                 example: "2025-01-10T09:00:00Z"
+ *                 description: Start of the unavailable period
  *               end_time:
  *                 type: string
  *                 format: date-time
- *                 description: Koniec okresu niedostępności (musi być po start_time)
- *                 example: "2025-01-10T16:00:00Z"
+ *                 description: End of the unavailable period (must be after start_time)
  *               note:
  *                 type: string
- *                 description: Opcjonalna notatka dotycząca powodu niedostępności
- *                 example: "Szkolenie"
+ *                 description: Optional note about the reason for unavailability
  *     responses:
  *       200:
- *         description: Pomyślnie dodano niedostępność nauczyciela
- *         content:
- *           application/json:
- *             example:
- *               success: true
+ *         description: Time off successfully created
  *       400:
- *         description: Walidacja nie powiodła się — start_time jest później niż end_time
- *         content:
- *           application/json:
- *             example:
- *               message: "Data końcowa musi być po dacie początkowej"
+ *         description: Validation failed — end_time must be after start_time
  *       403:
- *         description: Brak uprawnień — endpoint tylko dla nauczycieli
- *         content:
- *           application/json:
- *             example:
- *               message: "Brak uprawnień"
+ *         description: Access denied — teachers only
  *       500:
- *         description: Nieoczekiwany błąd serwera
- *         content:
- *           application/json:
- *             example:
- *               message: "Błąd zapisu"
+ *         description: Server error
  */
 router.post('/time-off', protect, async (req, res) => {
     if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Brak uprawnień' });
@@ -982,10 +978,8 @@ router.post('/time-off', protect, async (req, res) => {
  * @swagger
  * /api/meetings/time-off/{id}:
  *   delete:
- *     summary: Usuwa wpis niedostępności nauczyciela
- *     description: |
- *       Usuwa istniejący wpis `TeacherAvailability`.  
- *       Endpoint dostępny wyłącznie dla użytkowników z rolą **teacher**.
+ *     summary: Delete a teacher time-off entry
+ *     description: Deletes an existing teacher availability record.
  *     tags: [Meetings]
  *     security:
  *       - cookieAuth: []
@@ -995,28 +989,13 @@ router.post('/time-off', protect, async (req, res) => {
  *         required: true
  *         schema:
  *           type: integer
- *         description: ID wpisu niedostępności nauczyciela
- *         example: 42
  *     responses:
  *       200:
- *         description: Wpis niedostępności został pomyślnie usunięty
- *         content:
- *           application/json:
- *             example:
- *               success: true
- *               message: "Usunięto dzień wolny."
+ *         description: Time-off entry successfully deleted
  *       403:
- *         description: Brak uprawnień — endpoint tylko dla nauczycieli
- *         content:
- *           application/json:
- *             example:
- *               message: "Brak uprawnień"
+ *         description: Access denied
  *       404:
- *         description: Nie znaleziono wpisu lub nauczyciel nie jest jego właścicielem
- *         content:
- *           application/json:
- *             example:
- *               message: "Nie znaleziono wpisu lub brak uprawnień."
+ *         description: Entry not found or access denied
  */
 router.delete('/time-off/:id', protect, async (req, res) => {
     if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Brak uprawnień' });
@@ -1039,10 +1018,8 @@ router.delete('/time-off/:id', protect, async (req, res) => {
  * @swagger
  * /api/meetings/time-off/{id}:
  *   put:
- *     summary: Aktualizuje wpis o niedostępności nauczyciela
- *     description: |
- *       Endpoint pozwala nauczycielowi edytować istniejący wpis o niedostępności.
- *       Wpis można edytować tylko jeśli należy do zalogowanego nauczyciela.
+ *     summary: Update a teacher time-off entry
+ *     description: Allows a teacher to edit an existing availability record.
  *     tags: [Meetings]
  *     security:
  *       - cookieAuth: []
@@ -1050,10 +1027,8 @@ router.delete('/time-off/:id', protect, async (req, res) => {
  *       - in: path
  *         name: id
  *         required: true
- *         description: ID wpisu niedostępności (availability_id)
  *         schema:
  *           type: integer
- *           example: 12
  *     requestBody:
  *       required: true
  *       content:
@@ -1067,47 +1042,23 @@ router.delete('/time-off/:id', protect, async (req, res) => {
  *               start_time:
  *                 type: string
  *                 format: date-time
- *                 description: Początek okresu niedostępności
- *                 example: "2025-01-12T14:00:00Z"
  *               end_time:
  *                 type: string
  *                 format: date-time
- *                 description: Koniec okresu niedostępności (musi być po start_time)
- *                 example: "2025-01-12T18:00:00Z"
  *               note:
  *                 type: string
- *                 description: Opcjonalna notatka dotycząca niedostępności
- *                 example: "Wyjazd prywatny"
  *     responses:
  *       200:
- *         description: Pomyślnie zaktualizowano wpis niedostępności
- *         content:
- *           application/json:
- *             example:
- *               success: true
- *               message: "Zaktualizowano dzień wolny."
+ *         description: Time-off entry updated
  *       400:
- *         description: Niepoprawne dane wejściowe (np. koniec przed początkiem)
- *         content:
- *           application/json:
- *             example:
- *               message: "Data końcowa musi być po dacie początkowej"
+ *         description: End date must be after start date
  *       403:
- *         description: Brak uprawnień — tylko nauczyciel może edytować niedostępności
- *         content:
- *           application/json:
- *             example:
- *               message: "Brak uprawnień"
+ *         description: Access denied
  *       404:
- *         description: Wpis nie istnieje lub nauczyciel nie jest jego właścicielem
- *         content:
- *           application/json:
- *             example:
- *               message: "Nie znaleziono wpisu lub brak uprawnień."
+ *         description: Entry not found or access denied
  *       500:
- *         description: Błąd serwera
+ *         description: Server error
  */
-
 router.put('/time-off/:id', protect, async (req, res) => {
     if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Brak uprawnień' });
     

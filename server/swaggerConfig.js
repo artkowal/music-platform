@@ -4,12 +4,12 @@ const options = {
     info: {
       title: 'MusicDesk API',
       version: '1.0.0',
-      description: 'Oficjalna dokumentacja API dla platformy MusicDesk',
+      description: 'Official API documentation for the MusicDesk platform',
     },
     servers: [
       {
         url: 'http://localhost:5001',
-        description: 'Lokalny serwer deweloperski',
+        description: 'Local development server',
       },
     ],
     components: {

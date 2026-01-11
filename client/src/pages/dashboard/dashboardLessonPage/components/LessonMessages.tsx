@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { commentsApi } from "@/api/comments";
-import type { Comment } from "@/types/Comment";
+import { messagesApi } from "@/api/messages";
+import type { Message } from "@/types/Message";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,18 +17,18 @@ import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { useSocket } from "@/context/SocketContext";
 
-interface LessonCommentsProps {
+interface LessonMessagesProps {
   lessonId: number;
   accentColor: string;
   onClose?: () => void;
 }
 
-export function LessonComments({ lessonId, accentColor, onClose }: LessonCommentsProps) {
+export function LessonMessages({ lessonId, accentColor, onClose }: LessonMessagesProps) {
   const { user } = useAuth();
   const { socket } = useSocket(); 
   
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [newComment, setNewComment] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newMessage, setNewMessage] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -39,48 +39,48 @@ export function LessonComments({ lessonId, accentColor, onClose }: LessonComment
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const fetchComments = useCallback(async () => {
+  const fetchMessages = useCallback(async () => {
     try {
-      const data = await commentsApi.getByLessonId(lessonId);
-      setComments(data);
+      const data = await messagesApi.getByLessonId(lessonId);
+      setMessages(data);
       setTimeout(scrollToBottom, 100);
     } catch (error) {
-      console.error("Błąd pobierania komentarzy", error);
+      console.error("Błąd pobierania wiadomości", error);
     }
   }, [lessonId]);
 
   useEffect(() => {
-    fetchComments();
-  }, [fetchComments]);
+    fetchMessages();
+  }, [fetchMessages]);
 
   useEffect(() => {
     if (!socket) return;
 
-    const handleNewComment = (comment: Comment) => {
-        setComments((prev) => [...prev, comment]);
+    const handleNewMessage = (message: Message) => {
+        setMessages((prev) => [...prev, message]);
         setTimeout(scrollToBottom, 100);
     };
 
-    socket.on("receive_comment", handleNewComment);
+    socket.on("receive_message", handleNewMessage);
 
     return () => {
-        socket.off("receive_comment", handleNewComment);
+        socket.off("receive_message", handleNewMessage);
     };
   }, [socket]);
 
 
-  const handleAddComment = async () => {
-    if (!newComment.trim() || !socket) return;
+  const handleAddMessage = async () => {
+    if (!newMessage.trim() || !socket) return;
     
     setIsSending(true);
 
     try {
-        socket.emit("send_comment", {
+        socket.emit("send_message", {
             lessonId,
-            content: newComment
+            content: newMessage
         });
-        
-        setNewComment("");
+
+        setNewMessage("");
     } catch (error) {
         console.error(error);
     } finally {
@@ -91,30 +91,30 @@ export function LessonComments({ lessonId, accentColor, onClose }: LessonComment
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleAddComment();
+      handleAddMessage();
     }
   };
 
   const handleDelete = async (id: number) => {
     if (!confirm("Czy na pewno chcesz usunąć tę wiadomość?")) return;
     try {
-      await commentsApi.delete(id);
-      setComments(prev => prev.map(c => c.comment_id === id ? {...c, is_deleted: true} : c));
+      await messagesApi.delete(id);
+      setMessages(prev => prev.map(m => m.message_id === id ? {...m, is_deleted: true} : m));
     } catch (error) {
       console.error(error);
     }
   };
 
-  const startEdit = (comment: Comment) => {
-    setEditingId(comment.comment_id);
-    setEditContent(comment.content);
+  const startEdit = (message: Message) => {
+    setEditingId(message.message_id);
+    setEditContent(message.content);
   };
 
   const handleUpdate = async () => {
     if (!editingId || !editContent.trim()) return;
     try {
-      await commentsApi.update(editingId, editContent);
-      setComments(prev => prev.map(c => c.comment_id === editingId ? {...c, content: editContent, updated_at: new Date().toISOString()} : c));
+      await messagesApi.update(editingId, editContent);
+      setMessages(prev => prev.map(m => m.message_id === editingId ? {...m, content: editContent, updated_at: new Date().toISOString()} : m));
       setEditingId(null);
     } catch (error) {
       console.error(error);
@@ -151,22 +151,22 @@ export function LessonComments({ lessonId, accentColor, onClose }: LessonComment
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50/50 dark:bg-slate-950/50 custom-scrollbar">
-        {comments.length === 0 && (
+        {messages.length === 0 && (
             <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-60 text-center p-4">
                 <MessageSquare className="h-10 w-10 mb-2 stroke-1" />
                 <p className="text-sm">Masz pytania do lekcji? Napisz tutaj!</p>
             </div>
         )}
 
-        {comments.map((comment) => {
-          const isMe = user?.user_id === comment.user_id;
-          const isDeleted = Boolean(comment.is_deleted);
-          const isTeacher = comment.role === 'teacher';
-          const isEdited = !isDeleted && comment.updated_at && comment.updated_at !== comment.created_at;
+        {messages.map((message) => {
+          const isMe = user?.user_id === message.user_id;
+          const isDeleted = Boolean(message.is_deleted);
+          const isTeacher = message.role === 'teacher';
+          const isEdited = !isDeleted && message.updated_at && message.updated_at !== message.created_at;
 
           return (
             <div 
-                key={comment.comment_id} 
+                key={message.message_id} 
                 className={cn(
                     "flex w-full gap-2 animate-in slide-in-from-bottom-2 duration-300",
                     isMe ? "flex-row-reverse" : "flex-row"
@@ -179,7 +179,7 @@ export function LessonComments({ lessonId, accentColor, onClose }: LessonComment
                         isTeacher ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-100" : "bg-zinc-100 dark:bg-zinc-800"
                     )}
                 >
-                  {getInitials(comment.first_name, comment.last_name)}
+                  {getInitials(message.first_name, message.last_name)}
                 </AvatarFallback>
               </Avatar>
 
@@ -187,14 +187,14 @@ export function LessonComments({ lessonId, accentColor, onClose }: LessonComment
                 
                 <div className="flex items-baseline gap-2 mb-1 px-1">
                     <span className="text-[10px] font-medium text-foreground/80">
-                        {isMe ? "Ty" : `${comment.first_name} ${comment.last_name}`}
+                        {isMe ? "Ty" : `${message.first_name} ${message.last_name}`}
                     </span>
                     <span className="text-[9px] text-muted-foreground">
-                        {formatDate(comment.created_at)}
+                        {formatDate(message.created_at)}
                     </span>
                 </div>
 
-                {editingId === comment.comment_id ? (
+                {editingId === message.message_id ? (
                   <div className="w-full min-w-[220px] bg-background border rounded-xl p-2 shadow-lg z-10">
                     <Textarea 
                         value={editContent} 
@@ -223,10 +223,10 @@ export function LessonComments({ lessonId, accentColor, onClose }: LessonComment
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => startEdit(comment)}>
+                                    <DropdownMenuItem onClick={() => startEdit(message)}>
                                         <Pencil className="mr-2 h-3 w-3" /> Edytuj
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleDelete(comment.comment_id)} className="text-destructive focus:text-destructive">
+                                    <DropdownMenuItem onClick={() => handleDelete(message.message_id)} className="text-destructive focus:text-destructive">
                                         <Trash2 className="mr-2 h-3 w-3" /> Usuń
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
@@ -249,7 +249,7 @@ export function LessonComments({ lessonId, accentColor, onClose }: LessonComment
                                 <Trash2 className="h-3 w-3" /> Wiadomość usunięta
                             </span>
                         ) : (
-                            comment.content
+                            message.content
                         )}
                       </div>
                       
@@ -272,18 +272,18 @@ export function LessonComments({ lessonId, accentColor, onClose }: LessonComment
             <div className="relative flex-1">
                 <Textarea 
                     placeholder="Napisz wiadomość..." 
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={handleKeyDown}
                     className="min-h-[40px] max-h-[120px] pr-10 py-2.5 text-sm resize-none rounded-xl border-muted-foreground/20 focus-visible:ring-1 shadow-sm bg-background"
                     rows={1}
                 />
                 <div className="absolute right-1 top-1">
                     <Button 
-                        onClick={handleAddComment} 
-                        disabled={isSending || !newComment.trim()} 
+                        onClick={handleAddMessage} 
+                        disabled={isSending || !newMessage.trim()} 
                         size="icon"
-                        className={cn("h-8 w-8 rounded-lg transition-all", newComment.trim() ? "bg-primary" : "bg-muted text-muted-foreground hover:bg-muted")}
+                        className={cn("h-8 w-8 rounded-lg transition-all", newMessage.trim() ? "bg-primary" : "bg-muted text-muted-foreground hover:bg-muted")}
                     >
                         {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 ml-0.5" />}
                     </Button>

@@ -1,10 +1,8 @@
 import { useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { usersApi } from "@/api/users";
+import { authApi } from "@/api/auth";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { Loader2, Mail } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface DeleteAccountSectionProps {
   isLoading: boolean;
@@ -12,62 +10,65 @@ interface DeleteAccountSectionProps {
 }
 
 export function DeleteAccountSection({ isLoading, setIsLoading }: DeleteAccountSectionProps) {
-    const { logout } = useAuth();
-    const [password, setPassword] = useState("");
-    const [isConfirming, setIsConfirming] = useState(false);
+    const [isSent, setIsSent] = useState(false);
+    const { toast } = useToast();
 
-    const handleDelete = async () => {
-        if (!password) {
-            alert("Podaj hasło, aby potwierdzić.");
-            return;
-        }
-        if (!confirm("Czy jesteś absolutnie pewien? To usunie WSZYSTKIE Twoje dane bezpowrotnie.")) {
+    const handleDeleteRequest = async () => {
+        if (!confirm("Czy na pewno chcesz rozpocząć procedurę usuwania konta? Wyślemy Ci email potwierdzający.")) {
             return;
         }
 
         setIsLoading(true);
         try {
-            await usersApi.deleteAccount(password);
-            alert("Konto zostało usunięte.");
-            logout(); 
+            await authApi.requestDeleteAccount();
+            setIsSent(true);
+            toast({
+                title: "Wysłano email",
+                description: "Sprawdź swoją skrzynkę pocztową, aby dokończyć usuwanie konta.",
+                variant: "success"
+            });
         } catch (err) {
-            const error = err as { response?: { data?: { message?: string } } };
-            alert("Błąd: " + (error.response?.data?.message || "Nie udało się usunąć konta. Sprawdź hasło."));
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const error = err as any;
+            
+            toast({
+                title: "Błąd",
+                description: error.response?.data?.message || "Nie udało się wysłać żądania.",
+                variant: "destructive"
+            });
         } finally {
             setIsLoading(false);
         }
     };
 
-    if (!isConfirming) {
+    if (isSent) {
         return (
-            <Button variant="destructive" onClick={() => setIsConfirming(true)}>
-                Usuń moje konto
-            </Button>
+            <div className="flex flex-col items-start gap-3 animate-in fade-in">
+                <div className="bg-green-500/10 text-green-600 px-4 py-3 rounded-md flex items-center gap-2 text-sm border border-green-500/20">
+                    <Mail className="h-4 w-4" />
+                    Wysłaliśmy link potwierdzający na Twój email.
+                </div>
+                <p className="text-sm text-muted-foreground">
+                    Jeśli nie widzisz wiadomości, sprawdź folder SPAM.
+                </p>
+            </div>
         );
     }
 
     return (
-        <div className="flex flex-col sm:flex-row gap-4 items-end animate-in fade-in slide-in-from-top-2">
-            <div className="space-y-2 w-full max-w-sm">
-                <Label htmlFor="del-pass" className="text-destructive font-semibold">Potwierdź hasłem</Label>
-                <Input 
-                    id="del-pass" 
-                    type="password" 
-                    placeholder="Twoje hasło"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="bg-background"
-                />
-            </div>
-            <div className="flex gap-2">
-                <Button variant="outline" onClick={() => { setIsConfirming(false); setPassword(""); }}>
-                    Anuluj
-                </Button>
-                <Button variant="destructive" onClick={handleDelete} disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Potwierdzam usunięcie
-                </Button>
-            </div>
+        <div className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+                Aby trwale usunąć konto, kliknij poniższy przycisk. Ze względów bezpieczeństwa wyślemy Ci link potwierdzający na adres email.
+            </p>
+            <Button 
+                variant="destructive" 
+                onClick={handleDeleteRequest} 
+                disabled={isLoading}
+                className="w-full sm:w-auto"
+            >
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Rozpocznij usuwanie konta
+            </Button>
         </div>
     );
 }

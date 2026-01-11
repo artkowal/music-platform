@@ -3,13 +3,14 @@ import { Button } from "@/components/ui/button";
 import { CreateCourseDialog } from "@/components/dialogs/CreateCourseDialog";
 import { CourseCard } from "../../components/CourseCard";
 import type { Course } from "@/types/Course";
+import { useNavigate } from "react-router-dom";
 
 interface WorkplaceCourseListProps {
   courses: Course[];
   isTeacher: boolean;
   onRefresh: () => void;
   onDelete: (id: number) => void;
-  onEdit: (course: Course) => void;
+  onEdit?: (course: Course) => void;
   accentColor: string;
 }
 
@@ -18,9 +19,14 @@ export function WorkplaceCourseList({
   isTeacher, 
   onRefresh, 
   onDelete, 
-  onEdit,
   accentColor
 }: WorkplaceCourseListProps) {
+  
+  const navigate = useNavigate();
+
+  const handleEditCourse = (course: Course) => {
+    navigate(`/dashboard/courses/${course.course_id}/settings`);
+  };
 
   return (
     <div className="space-y-6">
@@ -63,7 +69,7 @@ export function WorkplaceCourseList({
                   isTeacher={isTeacher}
                   hideWorkplace={true}
                   onDelete={onDelete}
-                  onEdit={onEdit}
+                  onEdit={handleEditCourse}
                 />
               ))}
           </div>
